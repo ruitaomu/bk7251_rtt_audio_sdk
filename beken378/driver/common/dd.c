@@ -50,6 +50,9 @@
 #include "ble_pub.h"
 #endif
 
+#ifdef CFG_USE_QSPI
+#include "qspi_pub.h"
+#endif
 static DD_INIT_S dd_init_tbl[] =
 {
     /* name*/              /* init function*/          /* exit function*/
@@ -74,6 +77,10 @@ static DD_INIT_S dd_init_tbl[] =
 
 #if CFG_USE_HSLAVE_SPI
     {SPIDMA_DEV_NAME,       spidma_init,                spidma_uninit},
+#endif
+
+#if CFG_USE_QSPI
+    {QSPI_DEV_NAME,       qspi_init,                	qspi_exit},
 #endif
 
 #if CFG_USE_CAMERA_INTF

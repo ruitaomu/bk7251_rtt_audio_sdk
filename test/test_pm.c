@@ -3,7 +3,9 @@
 #include "wlan_ui_pub.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include "test_config.h"
 
+#ifdef TEST_PM
 static int pm_level(int argc, char **argv)
 {
 	uint32_t level;
@@ -39,4 +41,6 @@ static int pm_level(int argc, char **argv)
 MSH_CMD_EXPORT(pm_level, pm_level 1);
 
 #endif /* RT_USING_FINSH */
+
+#endif
 

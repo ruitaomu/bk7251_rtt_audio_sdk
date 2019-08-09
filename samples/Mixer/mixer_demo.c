@@ -1,9 +1,11 @@
 
 #include "rtconfig.h"
+#include "..\samples_config.h"
 
 #if CONFIG_SOUND_MIXER
-#include "mixer.h"
 
+#ifdef MIXER_DEMO
+#include "mixer.h"
 void mixer_set_value(int argc, char** argv)
 {
     int val;
@@ -20,4 +22,5 @@ void mixer_set_value(int argc, char** argv)
 }
 
 MSH_CMD_EXPORT(mixer_set_value, mixer_set_value test);
+#endif
 #endif

@@ -29,11 +29,13 @@
 
 extern unsigned char _empty_ram;
 
-#define RT_HW_HEAP_BEGIN    (void*)&_empty_ram
-#define RT_HW_HEAP_END      (void*)(0x00400000 + 256 * 1024)
+/* High Speed */ 
+#define RT_HW_TCM_BEGIN     (void*)&_empty_ram
+#define RT_HW_TCM_END       (void*)(0x00400000 + 256 * 1024)
 
-#define RT_HW_SDRAM_BEGIN   (0x00900000)
-#define RT_HW_SDRAM_END     (0x00900000 + 256 * 1024)
+/* Low Speed */ 
+#define RT_HW_SDRAM_BEGIN   (void*)(0x00900000)
+#define RT_HW_SDRAM_END     (void*)(0x00900000 + 256 * 1024) 
 
 void rt_hw_board_init(void);
 
@@ -42,5 +44,10 @@ void *sdram_malloc(unsigned long size);
 void sdram_free(void *ptr);
 void *sdram_calloc(unsigned int n, unsigned int size);
 void *sdram_realloc(void *ptr, unsigned long size);
+
+void *tcm_malloc(unsigned long size);
+void  tcm_free(void *ptr);
+void *tcm_calloc(unsigned int n, unsigned int size);
+void *tcm_realloc(void *ptr, unsigned long size);
 
 #endif

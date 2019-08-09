@@ -4,12 +4,14 @@
 #include <stdio.h>
 #include <string.h>
 #include "sys_config.h"
+#include "test_config.h"
 
 #define SPI_TX_BUF_LEN     (512)
 #define SPI_RX_BUF_LEN     (512)
 
 #ifdef BEKEN_USING_SPI_HSLAVE
 
+#ifdef SPI_HSLAVE_TEST
 #if (CFG_USE_HSLAVE_SPI == 0)
 #error "spi_hs_test need 'CFG_USE_HSLAVE_SPI' and 'CFG_USE_SPI_MST_PSRAM'"
 #endif
@@ -107,5 +109,5 @@ int spi_hs_test(int argc, char** argv)
 }
 
 MSH_CMD_EXPORT(spi_hs_test, spi_hs_test);
-
+#endif
 #endif // BEKEN_USING_SPI_HSLAVE

@@ -13,7 +13,9 @@
 #include "netdb.h"
 
 #include "record_common.h"
+#include "test_config.h"
 
+#ifdef RECORD_PCM_TCP_TEST
 #define RECORD_SAVE_BUF_SIZE (320 * 20)
 
 struct record_manager
@@ -242,3 +244,4 @@ static int record_pcm_tcp(int argc, char **argv)
     }
 }
 FINSH_FUNCTION_EXPORT_ALIAS(record_pcm_tcp, __cmd_record_pcm_tcp, record pcm tcp);
+#endif

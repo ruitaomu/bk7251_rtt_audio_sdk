@@ -23,7 +23,7 @@ int audio_device_set_evt_handler(void (*handler)(void *parameter, int state), vo
 void audio_device_set_rate(int sample_rate);
 void audio_device_set_volume(int volume);
 void audio_device_wait_free(void);
-
+void audio_device_mic_set_volume(int volume);
 void audio_device_mic_open(void);
 void audio_device_mic_set_rate(int sample_rate);
 void audio_device_mic_set_channel(int channel);

@@ -1,0 +1,14 @@
+
+from building import *
+
+src = Glob('*.c')
+cwd = GetCurrentDir()
+CPPPATH = [cwd, cwd + '/include']
+
+libs  = ['libx871_wakeup.a']
+
+libpath  = [cwd]
+
+group = DefineGroup('test_wakeup', src, depend = [''], LIBS = libs, LIBPATH = libpath, CPPPATH = CPPPATH)
+
+Return('group')

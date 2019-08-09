@@ -3,6 +3,7 @@
 #include <rtdevice.h>
 #include <drivers/audio.h>
 #include <audio_pipe.h>
+#include <data_node.h>
 
 #include <string.h>
 
@@ -29,23 +30,6 @@
 /* sample numbers */
 #define AUDIO_ADC_FIFO_SIZE           (32)
 #define PAUSE_EN                      1
-
-struct rt_data_node
-{
-    char *data_ptr;
-    rt_uint32_t data_size;
-};
-struct rt_data_node_list;
-
-struct rt_data_node_list
-{
-    struct rt_data_node *node;
-    rt_uint32_t size;
-    rt_uint32_t read_index, write_index;
-    rt_uint32_t data_offset;
-    void (*read_complete)(struct rt_data_node *node, void *user_data);
-    void *user_data;
-};
 
 /* data node for Tx Mode */
 struct data_node
@@ -76,6 +60,7 @@ struct audio_codec_device
 };
 
 static struct audio_codec_device _g_audio_codec;
+#endif
 
 /**
  * RT-Thread Audio utils
@@ -280,6 +265,7 @@ void rt_data_node_empty(struct rt_data_node_list *node_list)
     rt_hw_interrupt_enable(level);
 }
 
+#if ((CFG_SOC_NAME == SOC_BK7221U) && (CFG_USE_AUD_DAC == 1))
 /**
  * RT-Thread Audio Driver Interface
  */
@@ -368,6 +354,8 @@ static rt_err_t audio_codec_init(rt_device_t dev)
 static void net_transmit_init(void);
 static rt_err_t audio_codec_open(rt_device_t dev, rt_uint16_t oflag)
 {
+#define AVOID_POP_NOISE 1
+
     struct audio_codec_device *audio = RT_NULL;
 
     audio = (struct audio_codec_device *)dev;
@@ -379,7 +367,14 @@ static rt_err_t audio_codec_open(rt_device_t dev, rt_uint16_t oflag)
         _g_audio_codec.dma_irq_cnt = 0;
         dac_dma_addr_reset();
         dac_dma_enable(1);
-		
+#if AVOID_POP_NOISE	
+long tick = rt_tick_get();
+	while(1)
+	{
+		if(rt_tick_get() - tick > 4)
+			break;
+	}
+#endif
         audio_dac_open_analog_regs();
         audio_dac_set_enable_bit(1);
         audio->stat |= (DAC_DMA_IRQ_ENABLE | DAC_IS_OPENED);
@@ -451,38 +446,41 @@ static rt_err_t audio_codec_control(rt_device_t dev, int cmd, void *args)
     case CODEC_CMD_SAMPLERATE:
     {
         rt_uint32_t freq = *(rt_uint32_t *)args;
-
-#if !CONFIG_SOUND_MIXER
-        #if AUD_USE_EXT_PA
-		rt_kprintf("\r\n\r\n===%s:%d===\r\n",__FUNCTION__,__LINE__);
-        audio_dac_eable_mute(1);
-        #endif
-#endif
-        if ((audio->stat & DAC_IS_OPENED))
-        {
-            audio_dac_set_enable_bit(0);
-            dac_dma_enable(0);
-            audio_dac_set_sample_rate(freq);
-            audio_dac_set_enable_bit(1);
-            dac_dma_enable(1);
-        }
-        else 
-        {
-            audio_dac_set_sample_rate(freq);
-        }
-
-        rt_kprintf("set_dac_sample_rate %d \n", freq);
-        
-        #if AUD_USE_EXT_PA
-        if ((audio->stat & DAC_IS_OPENED) && (audio->volume != 0))
-        {
-        	rt_kprintf("\r\n\r\n===%s:%d===\r\n",__FUNCTION__,__LINE__);
-#if !CONFIG_SOUND_MIXER
-            audio_dac_eable_mute(0);
-#endif
-        }
-        #endif
-
+		static rt_uint32_t freq_back = AUDIO_DAC_DEF_SAMPLE_RATE;
+		if(freq != freq_back)
+		{
+			freq_back = freq;
+	#if !CONFIG_SOUND_MIXER
+	        #if AUD_USE_EXT_PA
+			rt_kprintf("\r\n\r\n===%s:%d===\r\n",__FUNCTION__,__LINE__);
+	        audio_dac_eable_mute(1);
+	        #endif
+	#endif
+	        if ((audio->stat & DAC_IS_OPENED))
+	        {
+	            audio_dac_set_enable_bit(0);
+	            dac_dma_enable(0);
+		    	
+	            audio_dac_set_sample_rate(freq);
+	            audio_dac_set_enable_bit(1);
+	            dac_dma_enable(1);
+	        }
+	        else 
+	        {
+	            audio_dac_set_sample_rate(freq);
+	        }
+	        rt_kprintf("set_dac_sample_rate %d \r\n", freq);
+	        
+	    #if AUD_USE_EXT_PA
+	        if ((audio->stat & DAC_IS_OPENED) && (audio->volume != 0))
+	        {
+	        	rt_kprintf("\r\n\r\n===%s:%d===\r\n",__FUNCTION__,__LINE__);
+			#if !CONFIG_SOUND_MIXER	
+	            audio_dac_eable_mute(0);
+			#endif
+	        }
+	    #endif
+		}
         break;
     }
 

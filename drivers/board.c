@@ -32,6 +32,7 @@
 #include "drv_uart.h"
 #include "include.h"
 #include "func_pub.h"
+#include <string.h>
 
 extern void os_clk_init(void);
 
@@ -39,15 +40,45 @@ extern void os_clk_init(void);
 #error "RT_TICK_PER_SECOND of bk7221u can only be configured as 1000!!!"
 #endif 
 
+static struct rt_memheap tcm_heap; 
+
+void *tcm_malloc(unsigned long size)
+{
+    return rt_memheap_alloc(&tcm_heap, size);
+}
+
+void tcm_free(void *ptr)
+{
+    rt_memheap_free(ptr); 
+}
+
+void *tcm_calloc(unsigned int n, unsigned int size)
+{
+    void* ptr = NULL;
+    
+    ptr = tcm_malloc(n * size);
+    if (ptr)
+    {
+        memset(ptr, 0, n * size);
+    }
+    
+    return ptr;
+}
+
+void *tcm_realloc(void *ptr, unsigned long size)
+{
+    return rt_memheap_realloc(&tcm_heap, ptr, size);
+}
+
 void rt_hw_board_init(void)
 {
 #ifdef RT_USING_HEAP
     /* init memory system */
-    rt_system_heap_init(RT_HW_HEAP_BEGIN, RT_HW_HEAP_END);
-
 #if(CFG_SOC_NAME == SOC_BK7221U)
-    rt_sdram_heap_init();
-#endif // #if(CFG_SOC_NAME == SOC_BK7221U)
+    rt_system_heap_init(RT_HW_SDRAM_BEGIN, RT_HW_SDRAM_END);
+	rt_sdram_heap_init(); 
+#endif
+    rt_memheap_init(&tcm_heap, "TCM", RT_HW_TCM_BEGIN, RT_HW_TCM_END-RT_HW_TCM_BEGIN); 
 #endif
 
     /* init hardware */

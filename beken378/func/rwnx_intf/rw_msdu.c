@@ -179,7 +179,7 @@ MSDU_NODE_T *rwm_tx_node_alloc(UINT32 len)
     UINT8 *buff_ptr;
     MSDU_NODE_T *node_ptr = 0;
 
-    node_ptr = (MSDU_NODE_T *)os_malloc(sizeof(MSDU_NODE_T)
+    node_ptr = (MSDU_NODE_T *)dtcm_malloc(sizeof(MSDU_NODE_T)
                                         + CFG_MSDU_RESV_HEAD_LEN
                                         + len
                                         + CFG_MSDU_RESV_TAIL_LEN);
@@ -189,15 +189,6 @@ MSDU_NODE_T *rwm_tx_node_alloc(UINT32 len)
         goto alloc_exit;
     }
 
-    #if(CFG_SOC_NAME == SOC_BK7221U)
-    if(((UINT32)node_ptr) >= 0x900000u)
-    {
-        // rwnx can't support 0x900000 RAM
-        os_free(node_ptr);
-        node_ptr = NULL;
-        goto alloc_exit;
-    }
-    #endif // #if(CFG_SOC_NAME == SOC_BK7221U)
     buff_ptr = (UINT8 *)((UINT32)node_ptr + sizeof(MSDU_NODE_T));
 
     node_ptr->msdu_ptr = buff_ptr;

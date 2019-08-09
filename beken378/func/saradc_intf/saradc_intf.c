@@ -267,13 +267,13 @@ void saradc_work_create(UINT32 scan_interval_ms)
 	rt_err_t result;
 	if(tadc_entity)
 	{
-		goto create_exit;
+		return;
 	}
 
 	tadc_entity = tadc_entity_init();
 	if(NULL == tadc_entity)
 	{
-		goto create_exit;
+		return;
 	}
 
 	result = rt_thread_init(&tadc_entity->tadc_thread, ADC_TAG,

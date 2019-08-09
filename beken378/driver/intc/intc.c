@@ -26,8 +26,6 @@
 #include "uart_pub.h"
 #if CFG_SUPPORT_ALIOS
 #include "ll.h"
-
-
 #else
 #include "power_save_pub.h"
 #endif

@@ -6,7 +6,9 @@
 * 程序功能： 通过串口输出字符串"hello RT-Thread!" ， 然后错位输出输入的字符
 */
 #include <rtthread.h>
+#include "test_config.h"
 
+#ifdef UART_DEMO
 #define SAMPLE_UART_NAME "uart1"
 /* 用于接收消息的信号量*/
 static struct rt_semaphore rx_sem;
@@ -68,5 +70,5 @@ static int uart_sample(int argc, char *argv[]) {
 }
 /* 导出到msh 命令列表中*/
 MSH_CMD_EXPORT(uart_sample, uart device sample);
-
+#endif
 

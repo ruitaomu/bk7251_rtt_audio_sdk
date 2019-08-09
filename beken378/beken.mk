@@ -89,6 +89,7 @@ $(NAME)_SOURCES +=  app/app.c \
                     driver/uart/Retarget.c \
                     driver/uart/uart.c \
                     driver/wdt/wdt.c \
+					driver/qspi/qspi.c \
                     func/bk7011_cal/bk7231_cal.c \
 					func/bk7011_cal/bk7231U_cal.c \
 					func/bk7011_cal/bk7221U_cal.c \

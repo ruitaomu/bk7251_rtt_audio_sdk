@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <finsh.h>
+#include "test_config.h"
 
-#define		CONFIG_PWM_TEST
 #ifdef 		CONFIG_PWM_TEST
 
 /*

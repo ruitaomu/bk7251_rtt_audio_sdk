@@ -10,7 +10,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "..\samples_config.h"
 
+#ifdef LIST_PLAY_TEST
 typedef struct play_list_struct{
 	music_list_t  which_playlist;
 	int play_list_status;
@@ -96,3 +98,4 @@ int bell_player(int argc, char** argv)
 MSH_CMD_EXPORT(list_player, list_player test);
 MSH_CMD_EXPORT(bell_player, bell_player test);
 
+#endif

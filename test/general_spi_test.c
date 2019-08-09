@@ -4,13 +4,14 @@
 #include <stdio.h>
 #include <string.h>
 #include "sys_config.h"
+#include "test_config.h"
 
 #define SPI_BAUDRATE       (10 * 1000 * 1000)
 #define SPI_TX_BUF_LEN     (32)
 #define SPI_RX_BUF_LEN     (32)
+#ifdef GENERAL_SPI_TEST
 
 #if ((CFG_USE_SPI_MASTER) &&(CFG_USE_SPI_SLAVE))
-
 int gspi_test(int argc, char** argv)
 {
 	struct rt_spi_device *spi_device;
@@ -123,4 +124,5 @@ int gspi_test(int argc, char** argv)
 }
 
 MSH_CMD_EXPORT(gspi_test, gspi_test);
+#endif
 #endif

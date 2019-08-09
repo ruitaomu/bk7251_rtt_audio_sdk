@@ -9,7 +9,9 @@
 #include "hal_aes.h"
 #include "mem_pub.h"
 #include "str_pub.h"
+#include "test_config.h"
 
+#ifdef HAL_SECURITY_TEST
 void hal_sec_test(int argc, char** argv)
 {
     int sec = 0;
@@ -145,3 +147,4 @@ aes_loop:
     }
 }
 MSH_CMD_EXPORT(hal_sec_test, hal_sec_test);
+#endif

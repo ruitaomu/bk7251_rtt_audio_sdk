@@ -57,6 +57,7 @@ static SDD_OPERATIONS i2s_op =
     i2s_ctrl
 };
 
+void intc_service_change_handler(UINT8 int_num, FUNCPTR isr);
 
 static void i2s_active(UINT8 enable)
 {
@@ -474,13 +475,42 @@ static void i2s_master_enable(UINT32 enable)
 		i2s_ctrl(I2S_CMD_SET_MSTEN, (void *)& enable);
 	}
 	
-	bit_dbg("[---]I2S_DEBUG: pcm_ctrl=0x%X,pcm_cn =0x%08X,pcm_stat =0x%X\r\n",REG_READ(PCM_CTRL),REG_READ(PCM_CN),REG_READ(PCM_STAT));
+	bit_dbg("[-ISR-]I2S_DEBUG: pcm_ctrl=0x%X,pcm_cn =0x%08X,pcm_stat =0x%X\r\n",REG_READ(PCM_CTRL),REG_READ(PCM_CN),REG_READ(PCM_STAT));
 	
 	i2s_icu_configuration(1);  //enable clock;
 }
 
+static void i2s_dma_master_enable(UINT32 enable)
+{
+    UINT32 value , ultemp;
+	
+	ultemp = 1;
+	
+    value = REG_READ(PCM_CN);
+    value = value | (RX_INT_EN | TX_INT0_EN );
+    REG_WRITE(PCM_CN, value);
 
+	/* enable i2s unit */
+	i2s_ctrl(I2S_CMD_UNIT_ENABLE, (void *) &ultemp);
 
+	/* 1:MASTER   0:SLAVE */
+	if(enable)
+	{
+		i2s_ctrl(I2S_CMD_SET_MSTEN, (void *) &enable);
+	}
+	else
+	{
+		i2s_ctrl(I2S_CMD_SET_MSTEN, (void *)& enable);
+	}
+	
+	bit_dbg("[-DMA-]I2S_DEBUG: pcm_ctrl=0x%X,pcm_cn =0x%08X,pcm_stat =0x%X\r\n",REG_READ(PCM_CTRL),REG_READ(PCM_CN),REG_READ(PCM_STAT));
+	
+	//i2s_icu_configuration(!enable);  //enable clock;
+	{
+        UINT32 param = PWD_I2S_PCM_CLK_BIT;
+	    sddev_control(ICU_DEV_NAME, CMD_CLK_PWR_UP, &param);
+	}
+}
 
 static UINT8 i2s_disable_i2s(void)
 {
@@ -546,9 +576,12 @@ UINT32 i2s_write_txfifo(UINT8 data)
 
 
 
-void i2s_init(void)
+void i2s_init(int register_isr)
 {
-    intc_service_register(IRQ_I2S_PCM, PRI_IRQ_I2S_PCM, i2s_isr);
+    if (register_isr)
+    {
+        intc_service_register(IRQ_I2S_PCM, PRI_IRQ_I2S_PCM, i2s_isr);
+    }
     sddev_register_dev(I2S_DEV_NAME, &i2s_op);
 }
 
@@ -644,11 +677,17 @@ static UINT32 i2s_ctrl(UINT32 cmd, void *param)
 		i2s_disable_interrupt();
 		break;
 	case I2S_CMD_MASTER_ENABLE:
-		i2s_master_enable(*(UINT8 *)param);	
+		i2s_master_enable(*(UINT32 *)param);	
 		break;
 	case I2S_CMD_DISABLE_I2S:
     	i2s_disable_i2s();
     	break;
+    case I2S_CMD_DMA_MASTER_ENABLE:
+		i2s_dma_master_enable(*(UINT32 *)param);
+		break;
+    case I2S_CMD_DMA_ISR:
+		intc_service_change_handler(IRQ_I2S_PCM, (FUNCPTR)param);
+		break;
 	
     default:
         ret = I2S_FAILURE;
@@ -754,7 +793,6 @@ UINT32 i2s_configure(UINT32 fifo_level, UINT32 sample_rate, UINT32 bits_per_samp
 	return I2S_SUCCESS;
 }
 
-
  UINT32 i2s_close(void)
 {	
 	UINT32 param = 0;
@@ -779,8 +817,8 @@ UINT32 i2s_transfer(UINT32 *i2s_send_buf , UINT32 *i2s_recv_buf, UINT32 count, U
 	i2s_trans.rx_remain_data_cnt = count;
 	i2s_trans.p_tx_buf =(UINT32 *) i2s_send_buf;
 	i2s_trans.p_rx_buf =(UINT32 *) i2s_recv_buf;
-	i2s_fifo_level.tx_level = 1;
-	i2s_fifo_level.rx_level = 1;
+	i2s_fifo_level.tx_level = FIFO_LEVEL_32;
+	i2s_fifo_level.rx_level = FIFO_LEVEL_32;
     GLOBAL_INT_RESTORE();	
 
 	if(param)
@@ -940,4 +978,3 @@ void i2s_isr(void)
 	REG_WRITE(PCM_STAT,i2s_status);
 
 }
-

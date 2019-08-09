@@ -145,13 +145,34 @@ static void camera_intf_ejpeg_end_handler(void)
     camera_intf_start_delay_timer();     
 }
 
+static void camera_intf_init_ejpeg_pixel(UINT32 ppi_type)
+{
+    switch (ppi_type)
+    {
+        case QVGA_320_240:
+            ejpeg_cfg.x_pixel = X_PIXEL_320;
+            ejpeg_cfg.y_pixel = Y_PIXEL_240;
+            break;
+
+        case VGA_640_480:
+            ejpeg_cfg.x_pixel = X_PIXEL_640;
+            ejpeg_cfg.y_pixel = Y_PIXEL_480;
+            break;
+
+        default:
+            CAMERA_INTF_WPRT("cm PPI unknown, use QVGA\r\n");
+            ejpeg_cfg.x_pixel = X_PIXEL_640;
+            ejpeg_cfg.y_pixel = Y_PIXEL_480;
+            break;
+    }
+}
+
 static void camera_intf_config_ejpeg(void* data)
 {   
     os_memset(&ejpeg_cfg, 0, sizeof(DJPEG_DESC_ST));
     os_memcpy(&ejpeg_cfg, data, sizeof(TVIDEO_DESC_ST));
 
-    ejpeg_cfg.x_pixel = X_PIXEL_640;
-    ejpeg_cfg.y_pixel = Y_PIXEL_480;
+    camera_intf_init_ejpeg_pixel(CMPARAM_GET_PPI(ejpeg_cfg.sener_cfg));
 
     ejpeg_cfg.start_frame_handler = NULL;
     ejpeg_cfg.end_frame_handler = camera_intf_ejpeg_end_handler;
@@ -162,7 +183,7 @@ static void camera_intf_config_ejpeg(void* data)
 #endif
 }
 
-static void camera_intf_sccb_write(UINT8 addr, UINT8 data)
+void camera_intf_sccb_write(UINT8 addr, UINT8 data)
 {
 	char buff = (char)data;
     
@@ -175,6 +196,85 @@ void camera_intf_sccb_read(UINT8 addr, UINT8 *data)
     i2c_operater.op_addr = addr;
     ddev_read(i2c_hdl, (char*)data, 1, (UINT32)&i2c_operater);
 }
+
+
+#if (USE_CAMERA == GC0328C_DEV) 
+static void camera_inf_cfg_gc0328c_ppi(UINT32 ppi_type)
+{
+    UINT32 i, size;
+    UINT8 addr, data;
+    
+    switch (ppi_type)
+    {
+        case QVGA_320_240:
+            size = sizeof(gc0328c_QVGA_320_240_talbe) / 2;
+            for(i=0; i<size; i++) 
+            {
+                addr = gc0328c_QVGA_320_240_talbe[i][0];
+                data = gc0328c_QVGA_320_240_talbe[i][1];
+                camera_intf_sccb_write(addr, data);
+            }
+            break;
+
+        case VGA_640_480:
+            size = sizeof(gc0328c_VGA_640_480_talbe) / 2;
+            for(i=0; i<size; i++) 
+            {
+                addr = gc0328c_VGA_640_480_talbe[i][0];
+                data = gc0328c_VGA_640_480_talbe[i][1];
+                camera_intf_sccb_write(addr, data);
+            }
+            break;
+
+        default:
+            CAMERA_INTF_WPRT("set PPI unknown\r\n");
+            break;
+    }
+}
+
+static void camera_inf_cfg_gc0328c_fps(UINT32 fps_type)
+{
+    UINT32 i, size;
+    UINT8 addr, data;
+
+    switch (fps_type)
+    {
+        case TYPE_5FPS:
+            size = sizeof(gc0328c_5pfs_talbe) / 2;
+            for(i=0; i<size; i++) 
+            {
+                addr = gc0328c_5pfs_talbe[i][0];
+                data = gc0328c_5pfs_talbe[i][1];
+                camera_intf_sccb_write(addr, data);
+            }
+            break;
+
+        case TYPE_10FPS:
+            size = sizeof(gc0328c_10pfs_talbe) / 2;
+            for(i=0; i<size; i++) 
+            {
+                addr = gc0328c_10pfs_talbe[i][0];
+                data = gc0328c_10pfs_talbe[i][1];
+                camera_intf_sccb_write(addr, data);
+            }
+            break;
+            
+        case TYPE_20FPS:
+            size = sizeof(gc0328c_20pfs_talbe) / 2;
+            for(i=0; i<size; i++) 
+            {
+                addr = gc0328c_20pfs_talbe[i][0];
+                data = gc0328c_20pfs_talbe[i][1];
+                camera_intf_sccb_write(addr, data);
+            }
+            break;
+
+        default:
+            CAMERA_INTF_WPRT("set FPS unknown\r\n");
+            break;
+    }
+}
+#endif
 
 static void camera_intf_config_senser(void)
 {
@@ -249,6 +349,10 @@ static void camera_intf_config_senser(void)
         data = gc0328c_init_talbe[i][1];
         camera_intf_sccb_write(addr, data);
     }
+
+    camera_inf_cfg_gc0328c_ppi(CMPARAM_GET_PPI(ejpeg_cfg.sener_cfg));
+    camera_inf_cfg_gc0328c_fps(CMPARAM_GET_FPS(ejpeg_cfg.sener_cfg));
+
     CAMERA_INTF_WPRT("GC0328C init finish\r\n");
 #elif (USE_CAMERA == BF_2013_DEV)
     i2c_operater.salve_id = BF_2013_DEV_ID;
@@ -357,6 +461,35 @@ void camera_intfer_deinit(void)
     GLOBAL_INT_RESTORE();
 
     os_memset(&ejpeg_cfg, 0, sizeof(DJPEG_DESC_ST));
+}
+
+UINT32 camera_intfer_set_video_param(UINT32 ppi_type, UINT32 pfs_type)
+{
+    #if (USE_CAMERA == GC0328C_DEV)
+    if(ejpeg_hdl == DD_HANDLE_UNVALID)
+        return 1;
+
+    if(ppi_type < PPI_MAX)
+    {
+        UINT32 param;
+        camera_intf_init_ejpeg_pixel(ppi_type);
+
+        param = ejpeg_cfg.x_pixel;
+        ddev_control(ejpeg_hdl, EJPEG_CMD_SET_X_PIXEL, &param);
+
+        param = ejpeg_cfg.y_pixel;
+        ddev_control(ejpeg_hdl, EJPEG_CMD_SET_Y_PIXEL, &param);
+        
+        camera_inf_cfg_gc0328c_ppi(ppi_type);
+    }
+    
+    if(pfs_type < FPS_MAX) 
+    {
+        camera_inf_cfg_gc0328c_fps(pfs_type);
+    }
+
+    return 0;
+    #endif
 }
 /*---------------------------------------------------------------------------*/
 

@@ -4,9 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 #include "sys_config.h"
+#include "test_config.h"
 
 #ifdef BEKEN_USING_SPI_PSRAM
 
+#ifdef SPI_PSRAM_TEST
 #if ((CFG_USE_SPI_MASTER == 0) || (CFG_USE_SPI_MST_PSRAM == 0))
 #error "test gspi psram need 'CFG_USE_SPI_MASTER' and 'CFG_USE_SPI_MST_PSRAM'"
 #endif
@@ -67,5 +69,6 @@ void spi_psram_test(int argc, char** argv)
     rt_device_close(psram);
 }
 MSH_CMD_EXPORT(spi_psram_test, spi_psram_test);
+#endif
 
 #endif  // BEKEN_USING_SPI_PSRAM

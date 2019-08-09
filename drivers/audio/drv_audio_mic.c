@@ -255,18 +255,20 @@ void adc_dma_finish_handler(UINT32 flag)
 
     if(adc_buf_ptr) 
 	{	
-        // copy(actually only need change write ptr of pipe)
-        rt_device_write(&audio_adc->record_pipe.parent, 0, 
-								adc_buf_ptr, 
-								AUDIO_RECV_BUFFER_LEN);
+		GDMA_CFG_ST en_cfg; 
+		rt_uint8_t *write_ptr, *write_ptr_bak; 
 
-        adc_buf_ptr += AUDIO_RECV_BUFFER_LEN;
+		en_cfg.channel = AUD_ADC_DEF_DMA_CHANNEL; 
+		write_ptr_bak = write_ptr = (rt_uint8_t *)sddev_control(GDMA_DEV_NAME, CMD_GDMA_GET_DST_WRITE_ADDR, &en_cfg); 
 
-        if(adc_buf_ptr >= end_buf)
-            adc_buf_ptr = (rt_uint8_t *)audio_adc->recv_fifo;
-
-        audio_adc->cur_ptr = (rt_uint16_t *)adc_buf_ptr;
-    } 
+		if(write_ptr < adc_buf_ptr) 
+			write_ptr = (end_buf - (rt_size_t)adc_buf_ptr) + (rt_size_t)(write_ptr - (rt_size_t)((rt_uint8_t *)audio_adc->recv_fifo)); 
+		else 
+			write_ptr -= (rt_size_t)adc_buf_ptr; 
+		// copy(actually only need change write ptr of pipe) 
+		rt_device_write(&audio_adc->record_pipe.parent, 0, 	adc_buf_ptr, (rt_size_t)write_ptr); 
+		audio_adc->cur_ptr = (rt_uint16_t *)write_ptr_bak; 
+	} 
 }
 
 void adc_dma_init(struct audio_mic_device *audio_adc)

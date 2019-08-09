@@ -21,8 +21,11 @@
 #include "sys_config.h"
 #include "error.h"
 #include "bk_rtos_pub.h"
+#include "test_config.h"
 
 #define I2S_DATA_LEN       0x100
+
+#ifdef I2S_TEST
 
 extern UINT32 i2s_configure(UINT32 fifo_level, UINT32 sample_rate, UINT32 bits_per_sample, UINT32 mode);
 
@@ -70,11 +73,7 @@ i2s_level_t  i2s_fifo_level;
 	}
 
 	/* init device*/
-	if(rt_device_init( i2s_device) != RT_EOK)
-	{
-		rt_kprintf(" --i2s device init failed---\r\n ");
-		return 0;
-	}
+	i2s_init(1);
 
 	/* open audio , set fifo level set sample rate/datawidth */
 	i2s_mode = i2s_mode| I2S_MODE| I2S_LRCK_NO_TURN| I2S_SCK_NO_TURN| I2S_MSB_FIRST| (0<<I2S_SYNC_LENGTH_BIT)| (0<<I2S_PCM_DATA_LENGTH_BIT);
@@ -157,3 +156,4 @@ i2s_level_t  i2s_fifo_level;
 }
 
 MSH_CMD_EXPORT(i2s_test, i2s_test);
+#endif

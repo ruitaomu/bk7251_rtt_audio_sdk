@@ -23,6 +23,83 @@ struct audio_device
 
 static struct audio_device *_audio_device = NULL;
 
+#if !CONFIG_SOUND_MIXER
+#define FADE_IN 0
+#define FADE_OUT 1
+#define NO_FADE 2
+
+#define MAX_FADE_STEP_SFT 3
+static unsigned short fade_flag = 0;//0:fade in; 1:fade out; 2:no fade
+static unsigned short fade_step = 0;
+
+void set_fade_out_flag(void)
+{
+	fade_step = 1 << MAX_FADE_STEP_SFT;
+	fade_flag = FADE_OUT;
+	rt_kprintf("\r\n\r\n===set fade out flag===\r\n\r\n\r\n");
+}
+
+void set_fade_in_flag(void)
+{
+	fade_step = 0;
+	fade_flag = FADE_IN;
+	rt_kprintf("\r\n\r\n===set fade in flag===\r\n\r\n\r\n");
+}
+
+void pcm_fade_handle(void *buffer,int size)
+{
+	int i,j;
+	long tmp;
+	int adj_size,adj_step;
+	short *ptr2 = (short*)buffer;
+	
+	size = size >> 1;
+	adj_size = size >> MAX_FADE_STEP_SFT;
+
+	if(NO_FADE == fade_flag)
+	{
+		return;
+	}
+	else 
+	{
+		if((0 == fade_step)&&(FADE_OUT == fade_flag))
+		{
+			for(i=0;i<size;i++)
+				ptr2[i] = 0;
+
+			printf("======fade out fill zero:%d====\r\n",size);
+			return;
+		}
+	}
+
+
+	for(i=0;i<(1<<MAX_FADE_STEP_SFT);i++)
+	{
+		if(FADE_IN == fade_flag)
+		{
+			if(++fade_step >= (1<<MAX_FADE_STEP_SFT))
+			{
+				fade_flag = NO_FADE;
+				return;
+			}
+		}
+		else
+		{
+			if(fade_step)
+				fade_step--;
+		}
+		for(j=0;j<adj_size;j++)
+		{
+			tmp = (long)ptr2[i*adj_size+j];
+			tmp = tmp *fade_step >>  MAX_FADE_STEP_SFT;
+			ptr2[i*adj_size+j] = tmp;
+		}
+	}
+	rt_kprintf("---fade out end:size=%d----\r\n",size);
+}
+
+#endif
+///
 void *audio_device_get_buffer(int *bufsz)
 {
     if (bufsz)
@@ -106,6 +183,8 @@ void audio_device_write(void *buffer, int size)
 
 			}
 			#else
+			set_fade_in_flag();
+			pcm_fade_handle( buffer,  size);
 			rt_device_write(_audio_device->snd, 0, buffer, size);
 			#endif
 
@@ -118,6 +197,8 @@ void audio_device_write(void *buffer, int size)
                 rt_device_write(_audio_device->snd, 0, buffer, size);
 		    }
 		    #else
+			
+			pcm_fade_handle( buffer,  size);
             rt_device_write(_audio_device->snd, 0, buffer, size);
 		    #endif
 		}
@@ -301,7 +382,17 @@ void audio_device_mic_set_channel(int channel)
         rt_kprintf("audio_device_mic_set_channel:%d \n", channel);
     }
 }
-
+void audio_device_mic_set_volume(int volume)
+{
+    if (_audio_device->mic)
+    {
+    	int value = volume;
+		
+        rt_device_control(_audio_device->mic, CODEC_CMD_SET_VOLUME, &value);
+		
+        rt_kprintf("audio_device_mic_set_volume:%d \n", volume);
+    }
+}
 int audio_device_mic_read(void *buffer, int size)
 {
     int length = 0;

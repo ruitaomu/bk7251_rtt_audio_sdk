@@ -394,7 +394,7 @@ void sctrl_init(void)
 
     #if (CFG_SOC_NAME == SOC_BK7221U)
     #if (CFG_USE_AUDIO)
-    sctrl_analog_set(SCTRL_ANALOG_CTRL8, 0x0033187C);
+    sctrl_analog_set(SCTRL_ANALOG_CTRL8, 0x0033587C);
     sctrl_analog_set(SCTRL_ANALOG_CTRL9, 0x82204607);
     sctrl_analog_set(SCTRL_ANALOG_CTRL10, 0x80801027);
     #endif // CFG_USE_AUDIO
@@ -1303,6 +1303,7 @@ void sctrl_enter_rtos_deep_sleep(PS_DEEP_CTRL_PARAM *deep_param)
 			param = GPIO_CFG_PARAM(i, GMODE_SET_HIGH_IMPENDANCE);	/*set gpio 0~39 as high impendance*/
             sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param); 
 		}
+
 		for (i = 0; i < GPIONUM; i++)
     	{		
         	if (deep_param->gpio_index_map & (0x01UL << i))			/*set gpio 0~31 mode*/
@@ -1310,12 +1311,20 @@ void sctrl_enter_rtos_deep_sleep(PS_DEEP_CTRL_PARAM *deep_param)
             	if(deep_param->gpio_index_map & deep_param->gpio_edge_map & (0x01UL << i))
             	{
             		param = GPIO_CFG_PARAM(i, GMODE_INPUT_PULLUP);
-            		sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param); 					
+                    sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param);
+                    if(0x1 != (UINT32)gpio_ctrl( CMD_GPIO_INPUT, &i))
+                    {   /*check gpio really input value,to correct wrong edge setting*/
+                        deep_param->gpio_edge_map &= ~(0x01UL << i);
+                    }
             	}
             	else
             	{
                 	param = GPIO_CFG_PARAM(i, GMODE_INPUT_PULLDOWN);
-                	sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param);  	
+                    sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param);
+                    if(0x0 != (UINT32)gpio_ctrl( CMD_GPIO_INPUT, &i))
+                    {   /*check gpio really input value,to correct wrong edge setting*/
+                        deep_param->gpio_edge_map |= (0x01UL << i);
+                    }
             	}
         	}
 			
@@ -1325,12 +1334,21 @@ void sctrl_enter_rtos_deep_sleep(PS_DEEP_CTRL_PARAM *deep_param)
             	{
             		param = GPIO_CFG_PARAM(i+32, GMODE_INPUT_PULLUP);
             		sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param); 
+                    reg = i+32;
+                    if(0x1 != (UINT32)gpio_ctrl( CMD_GPIO_INPUT, &reg))
+                    {   /*check gpio really input value,to correct wrong edge setting*/
+                        deep_param->gpio_last_edge_map &= ~(0x01UL << i);
+                    }
             	}
             	else
             	{
                 	param = GPIO_CFG_PARAM(i+32, GMODE_INPUT_PULLDOWN);
                 	sddev_control(GPIO_DEV_NAME, CMD_GPIO_CFG, &param);  
-	
+                    reg = i+32;
+                    if(0x0 != (UINT32)gpio_ctrl( CMD_GPIO_INPUT, &reg))
+                    {   /*check gpio really input value,to correct wrong edge setting*/
+                        deep_param->gpio_last_edge_map |= (0x01UL << i);
+                    }
             	}
         	}			
     	}

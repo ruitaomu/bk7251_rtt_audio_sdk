@@ -90,6 +90,8 @@
 #define PRI_IRQ_I2C1                         (24) 
 #define PRI_IRQ_UART2                        (25) 
 #define PRI_IRQ_UART1                        (26)
+#define PRI_IRQ_QSPI                         (27)
+
 #endif 
 
 extern void intc_service_register(UINT8 int_num, UINT8 int_pri, FUNCPTR isr);

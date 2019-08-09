@@ -380,7 +380,7 @@ static UINT32 ejpeg_open(UINT32 op_flag)
     ejpeg_set_target_high_byte(JPEG_BITRATE_MAX_SIZE);
     ejpeg_set_target_low_byte(JPEG_BITRATE_MIN_SIZE);
     ejpeg_set_bitrate_step(7);
-    ejpeg_enable_bitrate_ctrl(1);
+    //ejpeg_enable_bitrate_ctrl(1);
     
     ejpeg_enable_interrupt();
     ejpeg_power_up();

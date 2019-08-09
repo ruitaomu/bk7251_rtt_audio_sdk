@@ -15,6 +15,9 @@
 #include "record_common.h"
 #include <interf_enc.h>
 #include "amrnb_encoder.h"
+#include "test_config.h"
+
+#ifdef RECORD_AMR_TCP_TEST
 
 #define RECORD_SAVE_BUF_SIZE (60 * 20 * 5)
 
@@ -275,3 +278,4 @@ static int record_amr_tcp(int argc, char **argv)
     }
 }
 FINSH_FUNCTION_EXPORT_ALIAS(record_amr_tcp, __cmd_record_amr_tcp, record amr tcp);
+#endif

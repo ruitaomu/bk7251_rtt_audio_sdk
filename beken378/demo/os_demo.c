@@ -39,11 +39,11 @@
 #include "error.h"
 #include "portmacro.h"
 
-#define	 OS_THREAD_DEMO		1
-#define	 OS_MUTEX_DEMO		1
-#define	 OS_SEM_DEMO		1
-#define  OS_QUEUE_DEMO 		1
-#define  OS_TIMER_DEMO 		1
+#define	 OS_THREAD_DEMO		0
+#define	 OS_MUTEX_DEMO		0
+#define	 OS_SEM_DEMO		0
+#define  OS_QUEUE_DEMO 		0
+#define  OS_TIMER_DEMO 		0
 
 #if OS_THREAD_DEMO
 static void thread_0( beken_thread_arg_t arg )

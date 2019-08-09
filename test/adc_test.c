@@ -12,8 +12,8 @@
 
 #include "saradc_intf.h"
 #include "sys_ctrl_pub.h"
+#include "test_config.h"
 
-#define CONFIG_ADC_TEST
 #ifdef CONFIG_ADC_TEST
 
 static ADC_OBJ test_adc;

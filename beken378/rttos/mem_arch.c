@@ -24,6 +24,12 @@ void *os_memset(void *b, int c, UINT32 len)
     return (void *)memset(b, c, (unsigned int)len);
 }
 
+void *dtcm_malloc(size_t size)
+{
+	extern void *tcm_malloc(unsigned long size); 
+    return (void *)tcm_malloc(size);
+}
+
 void *os_malloc(size_t size)
 {
     return (void *)rt_malloc(size);

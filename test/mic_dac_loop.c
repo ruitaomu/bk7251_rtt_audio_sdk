@@ -11,6 +11,7 @@
 #include <rtthread.h>
 
 #include "record_common.h"
+#include "test_config.h"
 
 struct mic_dac_loop_manager
 {
@@ -24,7 +25,7 @@ struct mic_dac_loop_manager
     rt_device_t adc_device;
     rt_device_t dac_device;    
 };
-
+#ifdef MIC_DAC_LOOP
 static struct mic_dac_loop_manager *micdac_loop;
 
 static rt_err_t mic_dac_loop_write_done(struct rt_device *device, void *ptr)
@@ -223,3 +224,4 @@ static int mic_dac_loop(int argc, char **argv)
     }
 }
 FINSH_FUNCTION_EXPORT_ALIAS(mic_dac_loop, __cmd_mic_dac_loop, mic dac loop);
+#endif

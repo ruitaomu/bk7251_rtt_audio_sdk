@@ -405,6 +405,31 @@ static void gpio_enable_second_function(UINT32 func_mode)
         modul_select = GPIO_SPI1_DMA_MODULE;
         pmask = GPIO_SPI_MODULE_MASK;
         break;
+		
+    case GFUNC_MODE_QSPI_1LINE:
+        start_index = 16;
+        end_index = 17;
+        pmode = PERIAL_MODE_3;
+        break;   
+		
+	case GFUNC_MODE_QSPI_4LINE:
+        start_index = 16;
+        end_index = 19;
+        pmode = PERIAL_MODE_3;
+        break;    
+		
+	case GFUNC_MODE_QSPI_CLK:
+        start_index = 24;
+        end_index = 24;
+        pmode = PERIAL_MODE_3;
+        break;	
+		
+	case GFUNC_MODE_QSPI_CSN:
+        start_index = 26;
+        end_index = 26;
+        pmode = PERIAL_MODE_3;
+        break;
+		
         
 #endif // (CFG_SOC_NAME != SOC_BK7231)
 

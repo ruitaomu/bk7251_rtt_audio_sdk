@@ -32,6 +32,8 @@ enum
     I2S_CMD_MASTER_ENABLE,
     I2S_CMD_SLAVE_ENABLE,
     I2S_CMD_DISABLE_I2S,
+    I2S_CMD_DMA_MASTER_ENABLE,
+    I2S_CMD_DMA_ISR,
 };
 
 
@@ -87,7 +89,7 @@ typedef struct
 /*******************************************************************************
 * Function Declarations
 *******************************************************************************/
-void i2s_init(void);
+void i2s_init(int register_isr);
 void i2s_exit(void);
 void i2s_isr(void);
 UINT8 is_i2s_active(void);

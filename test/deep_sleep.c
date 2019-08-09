@@ -12,7 +12,9 @@
 
 #include "manual_ps_pub.h"
 #include "bk_rtos_pub.h"
+#include "test_config.h"
 
+#ifdef TEST_DEEP_SLEEP
 static void enter_deep_sleep_test(int argc,char *argv[])
 {
 	bk_rtos_delay_milliseconds(10);
@@ -46,3 +48,4 @@ static void enter_deep_sleep_test(int argc,char *argv[])
 }
 
 FINSH_FUNCTION_EXPORT_ALIAS(enter_deep_sleep_test, __cmd_sleep_mode, test sleep mode);
+#endif

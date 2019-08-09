@@ -307,6 +307,8 @@ OSStatus bk_rtos_deinit_queue(beken_queue_t* queue)
     mq->message_size       = 0;
     mq->number_of_messages = 0;
 
+    rt_free(mq);
+
     return kNoErr;
 }
 

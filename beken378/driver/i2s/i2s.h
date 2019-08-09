@@ -58,9 +58,9 @@
 #define TX_UDF1                      (0x01UL << 6)
 #define TX_UDF2                      (0x01UL << 7)
 #define RX_FIFO0_EMPTY               (0x01UL << 8)
-#define RX_FIFO0_ALMOST_EMPTY        (0x01UL << 9)
+#define RX_FIFO0_FULL                (0x01UL << 9) // modify according 7251 datasheet
 #define TX_FIFO0_FULL                (0x01UL << 10)
-#define TX_FIFO0_ALMOST_FULL         (0x01UL << 11)
+#define TX_FIFO0_EMPTY               (0x01UL << 11) // modify according 7251 datasheet
 #define TX_FIFO1_FULL                (0x01UL << 12)
 #define TX_FIFO1_ALMOST_FULL         (0x01UL << 13)
 #define TX_FIFO2_FULL                (0x01UL << 14)

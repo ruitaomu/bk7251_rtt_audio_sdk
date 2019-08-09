@@ -6,7 +6,9 @@
 */
 #include <rtthread.h>
 #include <rtdevice.h>
+#include "test_config.h"
 
+#ifdef GPIO_DEMO
 #define LED_PIN_NUM 30
 #define LED1_PIN_NUM 13
 #define LED2_PIN_NUM 27
@@ -52,4 +54,5 @@ static void pin_led_sample(void) {
 }
 /* 导出到msh 命令列表中*/
 MSH_CMD_EXPORT(pin_led_sample , pin led sample);
+#endif
 

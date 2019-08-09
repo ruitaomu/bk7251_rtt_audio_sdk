@@ -13,6 +13,6 @@ CPPPATH = [cwd, cwd + '/include']
 libs = ['voice_config_arm968_gcc']
 libpath = [cwd + '/libs']
 
-group = DefineGroup('voice_config', src, depend = ['SAMPLE_USING_VOICE_CONFIG'], CPPPATH = CPPPATH, LIBS = libs, LIBPATH = libpath)
+group = DefineGroup('voice_config', src, depend = [''], CPPPATH = CPPPATH, LIBS = libs, LIBPATH = libpath)
 
 Return('group')

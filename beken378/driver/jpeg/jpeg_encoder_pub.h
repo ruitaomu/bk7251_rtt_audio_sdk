@@ -28,6 +28,7 @@ typedef struct ejpeg_desc
     UINT16 rxbuf_len;
     UINT16 rx_read_len;
     UINT32 node_len;
+    UINT32 sener_cfg;
 
     UINT16 x_pixel;
     UINT16 y_pixel;
@@ -63,6 +64,9 @@ enum
 
 #define Y_PIXEL_480                                  (60)  // Y * 8
 #define X_PIXEL_640                                  (80)  // X * 8
+
+#define Y_PIXEL_240                                  (30)  // Y * 8
+#define X_PIXEL_320                                  (40)  // X * 8
 
 void ejpeg_init(void);
 void ejpeg_exit(void);

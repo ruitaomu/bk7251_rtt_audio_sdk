@@ -14,7 +14,9 @@
 
 #include "record_common.h"
 #include "opus.h"
+#include "test_config.h"
 
+#ifdef RECORD_OPUS_TCP_TEST
 #define RECORD_SAVE_BUF_SIZE (60 * 20 *2)
 
 struct record_manager
@@ -292,3 +294,4 @@ static int record_opus_tcp(int argc, char **argv)
     }
 }
 FINSH_FUNCTION_EXPORT_ALIAS(record_opus_tcp, __cmd_record_opus_tcp, record opus tcp);
+#endif

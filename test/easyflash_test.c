@@ -1,5 +1,4 @@
-#define		EASY_FLASH_TEST
-#ifdef 		EASY_FLASH_TEST
+
 #include "rtthread.h"
 #include <dfs.h>
 #include <dfs_fs.h>
@@ -13,7 +12,10 @@
 #include "flash.h" 	
 #include <finsh.h>
 #include "easyflash.h"
+#include "test_config.h"
 
+
+#ifdef 		EASY_FLASH_TEST
 unsigned char read_buff[10*1024];
 unsigned char write_buff[10*1024];
 

@@ -7,7 +7,9 @@
 #include <stdio.h>
 
 #include "audio_device.h"
+#include "test_config.h"
 
+#ifdef WAV_PLAY_TEST
 #define BUFSZ   2048
 
 struct RIFF_HEADER_DEF
@@ -142,3 +144,4 @@ int wavplay(int argc, char **argv)
 }
 
 MSH_CMD_EXPORT(wavplay, wavplay song.wav);
+#endif

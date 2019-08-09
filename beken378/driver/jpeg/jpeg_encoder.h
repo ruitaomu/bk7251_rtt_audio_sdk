@@ -31,7 +31,7 @@
 #define HSYNC_REV                                    (1 << 21)
 #define VSYNC_REV                                    (1 << 22)
 #define Y_PIXEL_POSI                                 (24)
-#define Y_PIXEL_MASK                                 (0xF)
+#define Y_PIXEL_MASK                                 (0xFF)
 
 #define JPEG_REG2                                    (JPEG_BASE + 2 * 4)
 #define TARGET_BYTE_H_POSI                           (0)

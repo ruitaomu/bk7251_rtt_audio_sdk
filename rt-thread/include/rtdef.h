@@ -237,17 +237,22 @@ typedef int (*init_fn_t)(void);
 #define RT_MM_PAGE_MASK                 (RT_MM_PAGE_SIZE - 1)
 #define RT_MM_PAGE_BITS                 12
 
+extern void *tcm_malloc(unsigned long size);
+extern void  tcm_free(void *ptr);
+extern void *tcm_calloc(unsigned int n, unsigned int size);
+extern void *tcm_realloc(void *ptr, unsigned long size);
+
 /* kernel malloc definitions */
 #ifndef RT_KERNEL_MALLOC
-#define RT_KERNEL_MALLOC(sz)            rt_malloc(sz)
+#define RT_KERNEL_MALLOC(sz)            tcm_malloc(sz)
 #endif
 
 #ifndef RT_KERNEL_FREE
-#define RT_KERNEL_FREE(ptr)             rt_free(ptr)
+#define RT_KERNEL_FREE(ptr)             tcm_free(ptr)
 #endif
 
 #ifndef RT_KERNEL_REALLOC
-#define RT_KERNEL_REALLOC(ptr, size)    rt_realloc(ptr, size)
+#define RT_KERNEL_REALLOC(ptr, size)    tcm_realloc(ptr, size)
 #endif
 
 /**
@@ -711,6 +716,11 @@ struct rt_memheap_item
 
     struct rt_memheap_item *next_free;                  /**< next free memheap item */
     struct rt_memheap_item *prev_free;                  /**< prev free memheap item */
+
+#ifdef RT_USING_MEMTRACE
+    rt_uint8_t thread[RT_NAME_MAX];                     /* thread name */
+    rt_tick_t tick;                                     /* create tick */
+#endif 
 };
 
 /**

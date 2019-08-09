@@ -8,8 +8,8 @@
 #include "board.h"
 #include "audio_device.h"
 #include "vad.h"
+#include "test_config.h"
 
-#define MICPHONE_TEST
 
 #ifdef MICPHONE_TEST
 

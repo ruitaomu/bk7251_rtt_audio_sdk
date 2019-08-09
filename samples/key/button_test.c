@@ -10,8 +10,9 @@
 #include "bk_rtos_pub.h"
 #include "error.h"
 #include "sys_ctrl_pub.h"
+#include "..\samples_config.h"
 
-#define BUTTON_TEST 
+
 #ifdef  BUTTON_TEST
 
 #define TEST_BUTTON 4

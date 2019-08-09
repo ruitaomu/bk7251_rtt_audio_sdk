@@ -275,6 +275,11 @@ static void airkiss_thread_entry(void *parameter)
             }
         }
     }
+	else
+	{
+	    rt_wlan_cfg_monitor(g_wlan_device, WIFI_MONITOR_STOP);
+        rt_wlan_set_monitor_callback(g_wlan_device, RT_NULL);
+	}
 
 _exit:
     if (g_switch_timer)

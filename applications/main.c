@@ -89,7 +89,6 @@ int main(int argc, char **argv)
 #endif
 
     wlan_app_init();
-	//rt_audio_codec_hw_init();
 	player_system_init();
 
     return 0;

@@ -1,22 +1,17 @@
-#include <string.h>
-
 #include <rtthread.h>
 #include <board.h>
 
-static struct rt_memheap sdram_heap;
+extern struct rt_memheap _heap;
+static struct rt_memheap *sdram_heap = &_heap;
 
 void rt_sdram_heap_init(void)
 {
-    rt_uint32_t begin = (rt_uint32_t)(RT_HW_SDRAM_BEGIN);
-    rt_uint32_t size = RT_HW_SDRAM_END - RT_HW_SDRAM_BEGIN;
-
-    rt_memheap_init(&sdram_heap, "SDRAM",
-        (void *)begin, size);
+    rt_kprintf("rt_sdram_heap_init complete.\n"); 
 }
 
 void *sdram_malloc(unsigned long size)
 {
-    return rt_memheap_alloc(&sdram_heap, size);
+    return rt_memheap_alloc(sdram_heap, size);
 }
 
 void sdram_free(void *ptr)
@@ -39,5 +34,5 @@ void *sdram_calloc(unsigned int n, unsigned int size)
 
 void *sdram_realloc(void *ptr, unsigned long size)
 {
-    return rt_memheap_realloc(&sdram_heap, ptr, size);
+    return rt_memheap_realloc(sdram_heap, ptr, size);
 }

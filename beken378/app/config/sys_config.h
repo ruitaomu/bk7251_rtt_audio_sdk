@@ -1,8 +1,6 @@
 #ifndef _SYS_CONFIG_H_
 #define _SYS_CONFIG_H_
 
-#define CFG_SUPPORT_BOOTLOADER                     0
-
 /*SUMMARY: macro--1: OPEN; --0:CLOSE*/
 
 /* uart2 for debug, and generally, uart1 is used for communication.
@@ -61,6 +59,7 @@
 #define CFG_SUPPORT_UVC                            0
 #endif
 #define CFG_USE_USB_CHARGE                         0
+#define CFG_USE_QSPI							   1
 
 
 /*section 4-----DEBUG macro config-----*/
@@ -137,13 +136,8 @@
 #define CONFIG_APP_MP3PLAYER 			           0
 
 /*section 21 ----- support ota*/
-#if CFG_SUPPORT_BOOTLOADER
-#define CFG_SUPPORT_OTA_HTTP                       1
-#define CFG_SUPPORT_OTA_TFTP                       1
-#else
 #define CFG_SUPPORT_OTA_HTTP                       0
 #define CFG_SUPPORT_OTA_TFTP                       0
-#endif
 
 /*section 22 ----- support adc calibrate*/
 #define CFG_SARADC_CALIBRATE                       0

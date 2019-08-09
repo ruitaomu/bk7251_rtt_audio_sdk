@@ -350,18 +350,9 @@ void power_save_mac_idle_callback(void)
 {
     if(power_save_if_sleep_first())
     {
-#if (CFG_SOC_NAME == SOC_BK7231)
         power_save_wkup_time_cal(1);
         nxmac_tsf_mgt_disable_setf(0);
         nxmac_listen_interval_setf(1);
-#else
-        nxmac_radio_wake_up_time_setf(r_wakeup_time);
-        nxmac_dtim_period_setf(bk_ps_info.ps_dtim_period);
-        delay(1);
-        nxmac_dtim_updated_by_sw_setf(1);
-        nxmac_tsf_mgt_disable_setf(0);
-        nxmac_wakeup_dtim_setf(1);
-#endif
 
         nxmac_atim_w_setf(512);
         nxmac_wake_up_sw_setf(0);
@@ -373,7 +364,6 @@ void power_save_mac_idle_callback(void)
         os_printf(" dtim period:%d multi:%d\r\n", bk_ps_info.ps_dtim_period, bk_ps_info.ps_dtim_multi);
         bk_ps_info.sleep_first = 0;
     }
-#if (CFG_SOC_NAME == SOC_BK7231)
     else
     {
         if(bk_ps_info.liston_mode == PS_LISTEN_MODE_DTIM)
@@ -400,7 +390,6 @@ void power_save_mac_idle_callback(void)
         }
 
     }
-#endif
 
     bk_ps_info.sleep_count ++;
 }
@@ -903,14 +892,9 @@ int power_save_dtim_disable_handler(void)
 
         if(power_save_wkup_event_get() & NEED_REBOOT_BIT)
         {
-#if CFG_SUPPORT_BOOTLOADER
             os_printf("wdt reboot\r\n");
             sddev_control(WDT_DEV_NAME, WCMD_SET_PERIOD, &wdt_val);
             sddev_control(WDT_DEV_NAME, WCMD_POWER_UP, NULL);
-#else
-            os_printf("reboot\r\n");
-            (*reboot)();
-#endif
         }
     }
 

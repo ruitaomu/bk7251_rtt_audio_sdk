@@ -299,6 +299,10 @@ static void tvideo_config_desc(void)
         node_len = TVIDEO_RXNODE_SIZE_UDP;
         #endif
     }
+    else if(tvideo_pool.send_type == TVIDEO_SND_BUFFER)
+    {
+        node_len = TVIDEO_RXNODE_SIZE_TCP;
+    }
     else {
         TVIDEO_WPRT("Err snd tpye in spidma\r\n"); 
     }
@@ -307,6 +311,10 @@ static void tvideo_config_desc(void)
     tvideo_st.rxbuf_len = node_len * 4;
     tvideo_st.node_len = node_len;
     tvideo_st.rx_read_len = 0;
+
+    tvideo_st.sener_cfg = 0;
+    CMPARAM_SET_PPI(tvideo_st.sener_cfg, VGA_640_480);
+    CMPARAM_SET_FPS(tvideo_st.sener_cfg, TYPE_20FPS);
 
     tvideo_st.node_full_handler = tvideo_rx_handler;
     tvideo_st.data_end_handler = tvideo_end_frame_handler;
@@ -404,7 +412,7 @@ tvideo_exit:
 }
 
 TVIDEO_SETUP_DESC_ST video_transfer_setup_bak = {0};
-UINT32 video_transfer_init(TVIDEO_SETUP_DESC_PTR setup_cfg)
+int video_transfer_init(TVIDEO_SETUP_DESC_PTR setup_cfg)
 {
     int ret;
 
@@ -439,12 +447,16 @@ UINT32 video_transfer_init(TVIDEO_SETUP_DESC_PTR setup_cfg)
             TVIDEO_FATAL("Error: Failed to create spidma_intfer: %d\r\n", ret);
             return kGeneralErr;
         }
+        
+        return kNoErr;
     }
-
-    return kNoErr;
+    else
+    {
+        return kInProgressErr;
+    }
 }
 
-UINT32 video_transfer_deinit(void)
+int video_transfer_deinit(void)
 {
     TVIDEO_PRT("video_transfer_deinit\r\n");
     
@@ -452,6 +464,15 @@ UINT32 video_transfer_deinit(void)
 
     while(tvideo_thread_hdl)
         bk_rtos_delay_milliseconds(10);
+
+    return kNoErr;
+}
+
+UINT32 video_transfer_set_video_param(UINT32 ppi, UINT32 fps)
+{
+    #if CFG_USE_CAMERA_INTF
+    return camera_intfer_set_video_param(ppi, fps);
+    #endif // CFG_USE_CAMERA_INTF
 }
 #endif  // (CFG_USE_SPIDMA || CFG_USE_CAMERA_INTF)
 

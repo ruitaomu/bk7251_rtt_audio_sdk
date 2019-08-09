@@ -268,7 +268,8 @@
 
 /* Webnet: A web server package for rt-thread */
 
-
+/* Player Config */
+#define PKG_USING_PLAYER
 /* Hardware Drivers Config */
 #define BEKEN_USING_UART1
 #define BEKEN_USING_UART2
@@ -287,10 +288,6 @@
 /* Application Samples Config */
 
 #define RT_USING_AIRKISS
-
-/* Peripheral Samples Config */
-
-#define SAMPLE_USING_GPIO_SAMPLE
 
 /* RT-Thread OTA Samples */
 

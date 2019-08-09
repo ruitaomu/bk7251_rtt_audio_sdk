@@ -9,7 +9,7 @@
 #if (BEKEN_USING_IIC && RT_USING_I2C)
 #define eeprom_addr   0x50;  /* 1010A2A1A0 -R/W */
 
-
+#ifdef I2C_RTT_TEST
 /************************I2C sample**********************/
 static int i2c_test_rtt(int argc, char *argv)
 {
@@ -149,6 +149,7 @@ FINSH_FUNCTION_EXPORT_ALIAS(i2c_test_rtt, __cmd_i2c_test_rtt, i2c test rtt cm);
 //FINSH_FUNCTION_EXPORT_ALIAS(i2c_test_get, __cmd_i2c_test_get, i2c test get cmd);
 #endif
 
+#endif
 #endif // (BEKEN_USING_IIC && RT_USING_I2C)
 
 

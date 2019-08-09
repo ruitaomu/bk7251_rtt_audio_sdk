@@ -545,6 +545,7 @@ static long _list_device(struct rt_list_node *list)
         "USB Host Bus",
         "SPI Bus",
         "SPI Device",
+		"I2S Bus",
         "SDIO Bus",
         "PM Pseudo Device",
         "Pipe",

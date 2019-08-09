@@ -6,9 +6,12 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 #include <rthw.h>
-
+#include "..\samples_config.h"
 
 #include "voice_config.h"
+
+
+#ifdef VOICE_CONFIG_TEST
 
 #define DEBUG_PRINTF     rt_kprintf("[voice] ");rt_kprintf
 #define SAMPLE_RATE         (16000)
@@ -157,3 +160,5 @@ MSH_CMD_EXPORT(voice_config, start voice config);
 MSH_CMD_EXPORT(voice_config_stop, stop voice config);
 
 #endif /* FINSH_USING_MSH */
+
+#endif
