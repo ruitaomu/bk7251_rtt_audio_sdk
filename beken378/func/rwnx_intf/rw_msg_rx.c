@@ -294,7 +294,34 @@ void mhdr_connect_ind(void *msg, UINT32 len)
 
 void mhdr_set_station_status(msg_sta_states val)
 {
+    GLOBAL_INT_DECLARATION();
+    GLOBAL_INT_DISABLE();
     connect_flag = val;
+
+    switch (val)
+    {
+        case MSG_GOT_IP:
+            if (NULL != rw_event_handlers[RW_EVT_STA_GOT_IP])
+            {
+                struct rw_evt_payload evt_payload;
+                os_memset((void *)&evt_payload, 0x0, sizeof(evt_payload));
+                (*rw_event_handlers[RW_EVT_STA_GOT_IP])(RW_EVT_STA_GOT_IP, (void *)&evt_payload);
+            }
+            break;
+
+        case MSG_NO_AP_FOUND:
+            if (NULL != rw_event_handlers[RW_EVT_STA_CONNECT_FAILED])
+            {
+                struct rw_evt_payload evt_payload;
+                os_memset((void *)&evt_payload, 0x0, sizeof(evt_payload));
+                (*rw_event_handlers[RW_EVT_STA_CONNECT_FAILED])(RW_EVT_STA_CONNECT_FAILED, (void *)&evt_payload);
+            }
+            break;
+
+        default:
+            break;
+    }
+    GLOBAL_INT_RESTORE();
 }
 
 msg_sta_states mhdr_get_station_status(void)

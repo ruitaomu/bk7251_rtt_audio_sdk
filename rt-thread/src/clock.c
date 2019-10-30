@@ -34,6 +34,7 @@
 static rt_tick_t rt_tick = 0;
 
 extern void rt_timer_check(void);
+extern void rt_hw_wdg_tick_proc();
 
 /**
  * This function will init system tick and set it to zero.
@@ -86,6 +87,9 @@ void rt_tick_increase(void)
 
     /* increase the global tick */
     ++ rt_tick;
+
+    /* fresh watch dog if needed */
+    rt_hw_wdg_tick_proc();
 
     /* check time slice */
     thread = rt_thread_self();

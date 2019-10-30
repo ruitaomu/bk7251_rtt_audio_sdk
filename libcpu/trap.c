@@ -20,6 +20,7 @@
 extern struct rt_thread *rt_current_thread;
 #ifdef RT_USING_FINSH
 extern long list_thread(void);
+extern void rt_hw_stack_print(rt_thread_t thread);
 #endif
 
 struct rt_hw_register
@@ -83,6 +84,7 @@ void rt_hw_trap_udef(struct rt_hw_register *regs)
 
 #ifdef RT_USING_FINSH
     list_thread();
+    rt_hw_stack_print(rt_current_thread);
 #endif
     rt_hw_cpu_shutdown();
 }
@@ -117,10 +119,11 @@ void rt_hw_trap_pabt(struct rt_hw_register *regs)
     rt_hw_show_register(regs);
 
     rt_kprintf("prefetch abort\n");
-    rt_kprintf("thread - %s stack:\n", RT_NAME_MAX, rt_current_thread->name);
+    rt_kprintf("thread - %.*s stack:\n", RT_NAME_MAX, rt_current_thread->name);
 
 #ifdef RT_USING_FINSH
     list_thread();
+    rt_hw_stack_print(rt_current_thread);
 #endif
     rt_hw_cpu_shutdown();
 }
@@ -138,10 +141,11 @@ void rt_hw_trap_dabt(struct rt_hw_register *regs)
     rt_hw_show_register(regs);
 
     rt_kprintf("data abort\n");
-    rt_kprintf("thread - %s stack:\n", RT_NAME_MAX, rt_current_thread->name);
+    rt_kprintf("thread - %.*s stack:\n", RT_NAME_MAX, rt_current_thread->name);
 
 #ifdef RT_USING_FINSH
     list_thread();
+    rt_hw_stack_print(rt_current_thread);
 #endif
     rt_hw_cpu_shutdown();
 }

@@ -100,6 +100,8 @@ static void _rt_scheduler_stack_check(struct rt_thread *thread)
         {
             extern long list_thread(void);
             list_thread();
+            extern void rt_hw_stack_print(rt_thread_t thread);
+            rt_hw_stack_print(thread);
         }
 #endif
         level = rt_hw_interrupt_disable();

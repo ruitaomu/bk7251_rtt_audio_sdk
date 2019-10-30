@@ -147,6 +147,7 @@ enum rw_evt_type
 {
     /* for station mode */
     RW_EVT_STA_CONNECTED = 0,    /* authentication success */
+    RW_EVT_STA_GOT_IP,                 /* got ip after authentication success  */
     RW_EVT_STA_DISCONNECTED,    /* disconnect with server */
     RW_EVT_STA_CONNECT_FAILED, /* authentication failed */
     /* for softap mode */

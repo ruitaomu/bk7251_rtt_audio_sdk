@@ -11,6 +11,7 @@
  * Date           Author       Notes
  */
 #include <rtthread.h>
+#include <string.h>
 
 /*****************************/
 /* CPU Mode                  */
@@ -68,3 +69,107 @@ rt_uint8_t *rt_hw_stack_init(void *tentry, void *parameter,
     /* return task's current stack address */
     return (rt_uint8_t *)stk;
 }
+
+void rt_hw_stack_print(rt_thread_t thread)
+{
+    extern void fiq_handler();
+    extern char __rt_init_end;
+
+    uint32_t call_stack_buf[32] = {0};
+    uint32_t code_start_addr;
+    uint32_t code_end_addr;
+    uint32_t stack_start_addr;
+    uint32_t stack_end_addr;
+    uint32_t sp;
+    uint32_t pc;
+    int call_stack_index = 0;
+
+    /* TODO: it should be more portable to calculate code space, like _stext _etext */
+    code_start_addr = (uint32_t)fiq_handler;
+    code_end_addr = (uint32_t)(&__rt_init_end);
+
+    if (NULL == thread) {
+        thread = rt_thread_self();
+    }
+
+    stack_start_addr = (uint32_t)thread ->stack_addr;
+    stack_end_addr = thread->stack_size + stack_start_addr;
+    sp = (uint32_t)thread->sp;
+    rt_kprintf("task=%.8s,stack=[0x%x,0x%x],sp=0x%x,stackoverflow=%d\n", thread->name, stack_start_addr, stack_end_addr, sp, sp < stack_start_addr);
+    for (; sp < stack_end_addr; sp += sizeof(size_t))
+    {
+        pc = *((uint32_t *) sp);
+        /* ARM9 using thumb instruction, so the pc must be an odd number */
+        if ((pc & 1) == 0) {
+            continue;
+        }
+        if ((code_start_addr < pc) && (pc < code_end_addr)) {
+            call_stack_buf[call_stack_index] = pc - 1;
+            call_stack_index++;
+        }
+    }
+    if (call_stack_index > 0)
+    {
+        int index;
+        rt_kprintf("addr2line.exe -e rtthread.elf -a -f");
+        for (index = 0; index < call_stack_index; index++) {
+            rt_kprintf(" %lx", call_stack_buf[index]);
+        }
+        rt_kprintf("\n");
+    }
+}
+
+void rt_stack_print(int argc, char **argv)
+{
+    struct rt_object_information *info;
+    struct rt_thread *thread;
+    struct rt_list_node *node;
+    size_t length;
+
+    if (argc < 2)
+    {
+        rt_kprintf("usage: stack task_name|all_tasks\n");
+        rt_hw_stack_print(NULL);
+        return;
+    }
+
+    info = rt_object_get_information(RT_Object_Class_Thread);
+    if (NULL == info)
+    {
+        rt_kprintf("can't find thread list\n");
+        return;
+    }
+
+    length = strlen((const char *)argv[1]);
+    if (length <= 0)
+    {
+        rt_kprintf("bad thread name\n");
+        return;
+    }
+    if ((length == strlen("all_tasks")) && (0 == strncmp(argv[1], "all_tasks", length)))
+    {
+        for (node = info->object_list.next; node != &info->object_list; node = node->next)
+        {
+            thread = rt_list_entry(node, struct rt_thread, list);
+            rt_hw_stack_print(thread);
+        }
+        return;
+    }
+    if (length > RT_NAME_MAX)
+    {
+        length = RT_NAME_MAX;
+    }
+
+    for (node = info->object_list.next; node != &info->object_list; node = node->next)
+    {
+        thread = rt_list_entry(node, struct rt_thread, list);
+        if (0 != strncmp(argv[1], thread->name, length))
+        {
+            continue;
+        }
+        rt_hw_stack_print(thread);
+        break;
+    }
+}
+
+MSH_CMD_EXPORT_ALIAS(rt_stack_print, stack, rt_hw_stack_print);

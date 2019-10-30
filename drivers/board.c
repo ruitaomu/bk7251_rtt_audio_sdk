@@ -34,6 +34,22 @@
 #include "func_pub.h"
 #include <string.h>
 
+enum wdg_status {
+    WDG_STATUS_STOP,
+    WDG_STATUS_REBOOT,
+    WDG_STATUS_WATCH,
+    WDG_STATUS_MAX,
+};
+
+struct wdg_context {
+    enum wdg_status wdg_flag;
+    int threshold_in_tick;
+    int consumed_in_tick;
+    rt_tick_t last_fresh_in_tick; /* add time to dealing with power save mode */
+};
+
+static struct wdg_context g_wdg_context = { WDG_STATUS_STOP, 0, 0 };
+
 extern void os_clk_init(void);
 
 #if (RT_TICK_PER_SECOND != 1000)
@@ -119,6 +135,7 @@ void rt_hw_cpu_reset(void)
     }
 
     rt_kprintf("reboot system \n");
+    g_wdg_context.wdg_flag = WDG_STATUS_REBOOT;
     rt_device_control(device, RT_DEVICE_CTRL_WDT_SET_TIMEOUT, &time);
     rt_device_control(device, RT_DEVICE_CTRL_WDT_START, RT_NULL);
 
@@ -126,6 +143,120 @@ void rt_hw_cpu_reset(void)
 }
 
 FINSH_FUNCTION_EXPORT_ALIAS(rt_hw_cpu_reset, __cmd_reboot, reboot system);
+
+
+/**
+ * start dog's time-out
+ */
+void rt_hw_wdg_start(int argc, char **argv)
+{
+    struct rt_device *device;
+    int time = 10000; /* 10000 * 1ms = 10000ms = 10s */
+
+    if (WDG_STATUS_REBOOT == g_wdg_context.wdg_flag)
+    {
+        return;
+    }
+
+    if (argc > 1)
+    {
+        time = atoi(argv[1]);
+    }
+
+    device = rt_device_find(WDT_DEV_NAME);
+
+    if (!device)
+    {
+        rt_kprintf("Device %s not found \n");
+        return ;
+    }
+
+    rt_kprintf("start watch dog\n");
+    rt_device_control(device, RT_DEVICE_CTRL_WDT_SET_TIMEOUT, &time);
+    rt_device_control(device, RT_DEVICE_CTRL_WDT_START, RT_NULL);
+
+    g_wdg_context.threshold_in_tick = time * 3 / 4;
+    g_wdg_context.consumed_in_tick = 0;
+    g_wdg_context.last_fresh_in_tick = rt_tick_get();
+    rt_kprintf("%s time=%d threshold=%d\n", __FUNCTION__, time, g_wdg_context.threshold_in_tick);
+
+    g_wdg_context.wdg_flag = WDG_STATUS_WATCH;
+}
+
+FINSH_FUNCTION_EXPORT_ALIAS(rt_hw_wdg_start, __cmd_wdg_start, wdg_start);
+
+/**
+ * refresh dog's time-out
+ */
+void rt_hw_wdg_refresh(void)
+{
+    struct rt_device *device;
+
+    device = rt_device_find(WDT_DEV_NAME);
+
+    if (!device)
+    {
+        rt_kprintf("Device %s not found \n");
+        return ;
+    }
+
+    if (WDG_STATUS_WATCH == g_wdg_context.wdg_flag)
+    {
+        rt_kprintf("refresh watch dog\n");
+        rt_device_control(device, RT_DEVICE_CTRL_WDT_KEEPALIVE, RT_NULL);
+    }
+    g_wdg_context.consumed_in_tick = 0;
+    g_wdg_context.last_fresh_in_tick = rt_tick_get();
+}
+
+FINSH_FUNCTION_EXPORT_ALIAS(rt_hw_wdg_refresh, __cmd_wdg_refresh, wdg_refresh);
+
+/**
+ * stop dog's time-out
+ */
+void rt_hw_wdg_stop(void)
+{
+    struct rt_device *device;
+
+    if (WDG_STATUS_REBOOT == g_wdg_context.wdg_flag)
+    {
+        return;
+    }
+
+    device = rt_device_find(WDT_DEV_NAME);
+
+    if (!device)
+    {
+        rt_kprintf("Device %s not found \n");
+        return ;
+    }
+
+    rt_kprintf("stop watch dog\n");
+    rt_device_control(device, RT_DEVICE_CTRL_WDT_STOP, RT_NULL);
+
+    g_wdg_context.wdg_flag = WDG_STATUS_STOP;
+    g_wdg_context.threshold_in_tick = 0;
+}
+
+FINSH_FUNCTION_EXPORT_ALIAS(rt_hw_wdg_stop, __cmd_wdg_stop, wdg_stop);
+
+void rt_hw_wdg_tick_proc()
+{
+    if (WDG_STATUS_WATCH != g_wdg_context.wdg_flag)
+    {
+        return;
+    }
+    g_wdg_context.consumed_in_tick++;
+    /**
+      * normal mode: using 120M RTC, 1 tick = 1ms
+      * ps mode: using 32K RTC, rt_tick is adapted
+      */
+    if ((g_wdg_context.consumed_in_tick >= g_wdg_context.threshold_in_tick)
+      || ((int)(rt_tick_get() - g_wdg_context.last_fresh_in_tick) >= g_wdg_context.threshold_in_tick))
+    {
+        rt_hw_wdg_refresh();
+    }
+}
 
 #ifdef BEKEN_USING_WLAN
 static int auto_func_init(void)
