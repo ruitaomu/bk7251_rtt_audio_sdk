@@ -2,7 +2,6 @@
 #include <rthw.h>
 #include <rtthread.h>
 #include <rtdevice.h>
-#include <dfs_posix.h>
 
 #include "include.h"
 #include "shell.h"

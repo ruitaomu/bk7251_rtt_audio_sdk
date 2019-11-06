@@ -4,6 +4,6 @@ src = Glob('*.c')
 cwd = GetCurrentDir()
 CPPPATH = [cwd]
 
-group = DefineGroup('player_test', src, depend = [''], CPPPATH = CPPPATH)
+group = DefineGroup('player_test', src, depend = ['PKG_USING_PLAYER'], CPPPATH = CPPPATH)
 
 Return('group')

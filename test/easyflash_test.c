@@ -1,3 +1,4 @@
+#ifdef EASY_FLASH_TEST
 
 #include "rtthread.h"
 #include <dfs.h>
@@ -15,7 +16,6 @@
 #include "test_config.h"
 
 
-#ifdef 		EASY_FLASH_TEST
 unsigned char read_buff[10*1024];
 unsigned char write_buff[10*1024];
 

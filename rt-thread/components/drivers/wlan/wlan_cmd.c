@@ -286,9 +286,11 @@ int wifi_default(void)
     int result = 0;
     struct rt_wlan_device *wlan;
 
+#ifdef RT_USING_DFS
 #ifdef PKG_USING_CJSON
     /* read default setting for wifi */
     wifi_read_cfg(WIFI_SETTING_FN);
+#endif
 #endif
 
     if (network_mode == WIFI_STATION)
@@ -375,8 +377,10 @@ int wifi(int argc, char **argv)
 
         network_mode = WIFI_STATION;
 
+#ifdef RT_USING_DFS
 #ifdef PKG_USING_CJSON
         wifi_save_cfg(WIFI_SETTING_FN);
+#endif
 #endif
 
         return 0;

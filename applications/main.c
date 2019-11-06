@@ -23,9 +23,13 @@
  */
 
 #include "rtthread.h"
+#if defined(RT_USING_DFS)
 #include <dfs.h>
 #include <dfs_fs.h>
+#endif
+#if defined(PKG_USING_PLAYER)
 #include "player.h"
+#endif
 
 #include "include.h"
 #include "driver_pub.h"
@@ -49,6 +53,7 @@ extern int rt_hw_flash_disk_readonly_init(const char *name, uint32_t base, uint3
 int main(int argc, char **argv)
 {
     /* mount ROMFS as root directory */
+#if defined(RT_USING_DFS)
     if (dfs_mount(RT_NULL, "/", "rom", 0, (const void *)DFS_ROMFS_ROOT) == 0)
     {
         rt_kprintf("ROMFS File System initialized!\n");
@@ -57,6 +62,7 @@ int main(int argc, char **argv)
     {
         rt_kprintf("ROMFS File System initialized Failed!\n");
     }
+#endif
 
 #if 0
     /* mount sd card fat partition 1 as root directory */
@@ -89,7 +95,9 @@ int main(int argc, char **argv)
 #endif
 
     wlan_app_init();
+#if defined(PKG_USING_PLAYER)
 	player_system_init();
+#endif
 
     return 0;
 }
