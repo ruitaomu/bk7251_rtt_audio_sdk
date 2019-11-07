@@ -6,7 +6,7 @@ list = os.listdir(cwd)
 CPPPATH = [cwd]
 objs = []
 
-if GetDepend('RT_USING_DFS') == False:
+if GetDepend('RT_USING_DFS_ROMFS') == False:
     SrcRemove(src, 'romfs.c')
 
 group = DefineGroup('Application', src, depend = [''], CPPPATH = CPPPATH)

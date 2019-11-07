@@ -23,8 +23,7 @@
  */
 
 #include "rtthread.h"
-#if defined(RT_USING_DFS)
-#include <dfs.h>
+#if defined(RT_USING_DFS_ROMFS)
 #include <dfs_fs.h>
 #endif
 #if defined(PKG_USING_PLAYER)
@@ -53,7 +52,7 @@ extern int rt_hw_flash_disk_readonly_init(const char *name, uint32_t base, uint3
 int main(int argc, char **argv)
 {
     /* mount ROMFS as root directory */
-#if defined(RT_USING_DFS)
+#if defined(RT_USING_DFS_ROMFS)
     if (dfs_mount(RT_NULL, "/", "rom", 0, (const void *)DFS_ROMFS_ROOT) == 0)
     {
         rt_kprintf("ROMFS File System initialized!\n");
