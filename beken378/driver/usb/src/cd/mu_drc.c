@@ -53,8 +53,12 @@ static uint32_t MGC_SetHnpEnableIrpComplete(void *pCompleteParam, MUSB_ControlIr
 static uint32_t MGC_SetHnpSupportIrpComplete(void *pCompleteParam, MUSB_ControlIrp *pIrp);
 static void MGC_OtgStateGetId(MGC_Port *pPort, uint8_t bIsReset);
 extern void MUSB_Host_Startup(void);
+extern void MUSB_Disconn_Fun(void *pParam);
 
 /**************************** GLOBALS *****************************/
+
+static uint8_t UdeviceConnectFlag = 0;
+/** SET_FEATURE(a_hnp_support) request */
 static const uint8_t MGC_aSetHnpSupportData[] =
 {
     MUSB_DIR_OUT | MUSB_TYPE_STANDARD | MUSB_RECIP_DEVICE,
@@ -127,65 +131,92 @@ uint8_t MGC_DrcInit(MGC_Port *pPort)
     uint8_t *pBase = (uint8_t *)pImplController->pControllerAddressIst;
     uint8_t bOk = FALSE;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* count non-default endpoints by reading core */
     pPort->bEndCount = 1;
     pPort->wEndMask =  1;
-    for(bEnd = 1; bEnd < MGC_MAX_USB_ENDS; bEnd++)
+    for (bEnd = 1; bEnd < MGC_MAX_USB_ENDS; bEnd++)
     {
         MGC_Write8(pBase, MGC_O_DRC_INDEX, bEnd);
         bFifoSize = MGC_Read8(pBase, MGC_O_DRC_FIFOSIZE);
-        if(!bFifoSize)
+		MUSB_DPRINTF("MGC_DrcInit: pPort->bEndCount = %d\r\n", pPort->bEndCount);
+        MUSB_DPRINTF("MGC_DrcInit: bFifoSize = 0x%x\r\n", bFifoSize);
+        if (!bFifoSize)
         {
             /* 0's returned when no more endpoints */
             break;
         }
         pPort->bEndCount++;
+		MUSB_DPRINTF("MGC_DrcInit: pPort->bEndCount = %d\r\n", pPort->bEndCount);
         pPort->wEndMask |= (1 << bEnd);
     }
 
+    MUSB_DPRINTF("%s: pPort->pPrivateData = 0x%p\r\n", __FUNCTION__, pPort->pPrivateData);
+    MUSB_DPRINTF("MGC_DrcInit: pPort->bEndcount = 0x%x, sizeof(Endpointresource) = 0x%x\r\n", pPort->bEndCount, sizeof(MGC_EndpointResource));
+    if (pPort->pPrivateData)
+    {
+        MUSB_MemFree(pPort->pPrivateData);
+    }
     pPort->pPrivateData = MUSB_MemAlloc(pPort->bEndCount *
                                         sizeof(MGC_EndpointResource));
-    if(MUSB_ArrayInit(&(pPort->LocalEnds), sizeof(MGC_EndpointResource),
-                      pPort->bEndCount, pPort->pPrivateData))
+    MUSB_DPRINTF("%s: pPort->pPrivateData = 0x%p\r\n", __FUNCTION__, pPort->pPrivateData);
+    if (pPort->pPrivateData)
     {
-        bOk = TRUE;
-
-        /* add endpoint 0 */
-        MUSB_MemSet((void *)&end, 0, sizeof(end));
-        end.bIsFifoShared = TRUE;
-        end.bTrafficType = end.bRxTrafficType = MUSB_ENDPOINT_XFER_CONTROL;
-        end.wMaxPacketSizeTx = MGC_END0_FIFOSIZE;
-        end.wMaxPacketSizeRx = MGC_END0_FIFOSIZE;
-        end.bIsClaimed = end.bRxClaimed = TRUE;
-        //把endpoint0的数据拷贝到localEnds所指向的动态内存空间,偏移量为
-        // pArray->wItemCount * * pArray->wItemSize
-        MUSB_ArrayAppend(&(pPort->LocalEnds), &end);
-        //把其它endpoint的数据拷贝到localEnds所指向的动态内存空间
-        /* add others */
-        for(bEnd = 1; bEnd < pPort->bEndCount; bEnd++)
+        MUSB_MemSet(pPort->pPrivateData, 0, pPort->bEndCount * sizeof(MGC_EndpointResource));
+        if (MUSB_ArrayInit(&(pPort->LocalEnds), sizeof(MGC_EndpointResource), 
+            pPort->bEndCount, pPort->pPrivateData))
         {
-            MGC_Write8(pBase, MGC_O_DRC_INDEX, bEnd);
-            bFifoSize = MGC_Read8(pBase, MGC_O_DRC_FIFOSIZE);
-            MUSB_MemSet((void *)&end, 0, sizeof(end));
-            end.bLocalEnd = bEnd;
-            end.wMaxPacketSizeTx = 1 << (bFifoSize & 0x0f);
-            /* shared TX/RX FIFO? */
-            if((bFifoSize & 0xf0) == 0xf0)
-            {
-                end.wMaxPacketSizeRx = 1 << (bFifoSize & 0x0f);
-                end.bIsFifoShared = TRUE;
-            }
-            else
-            {
-                end.wMaxPacketSizeRx = 1 << ((bFifoSize & 0xf0) >> 4);
-                end.bIsFifoShared = FALSE;
-            }
+            bOk = TRUE;
+
+            /* add endpoint 0 */
+            MUSB_MemSet((void*)&end, 0, sizeof(end));
+            end.bIsFifoShared = TRUE;
+            end.bTrafficType = end.bRxTrafficType = MUSB_ENDPOINT_XFER_CONTROL;
+            end.wMaxPacketSizeTx = MGC_END0_FIFOSIZE;
+            end.wMaxPacketSizeRx = MGC_END0_FIFOSIZE;
+            end.bIsClaimed = end.bRxClaimed = TRUE;
+            // 把endpoint0的数据拷贝到localEnds所指向的动态内存空间,偏移量为
+            // pArray->wItemCount * * pArray->wItemSize
+            MUSB_DPRINTF("MGC_DrcInit: MUSB_ArrayAppend1\r\n");
+            MUSB_DPRINTF("MGC_DrcInit: pPort->bEndCount = %d\r\n", pPort->bEndCount);
             MUSB_ArrayAppend(&(pPort->LocalEnds), &end);
+            // 把其它endpoint的数据拷贝到localEnds所指向的动态内存空间
+            /* add others */
+            MUSB_DPRINTF("MGC_DrcInit: pPort->bEndCount = %d\r\n", pPort->bEndCount);
+            for (bEnd = 1; bEnd < pPort->bEndCount; bEnd++)
+            {
+                MGC_Write8(pBase, MGC_O_DRC_INDEX, bEnd);
+                bFifoSize = MGC_Read8(pBase, MGC_O_DRC_FIFOSIZE);
+                MUSB_DPRINTF("MGC_DrcInit: bFifoSize = 0x%x\r\n", bFifoSize);
+                MUSB_MemSet((void*)&end, 0, sizeof(end));
+                end.bLocalEnd = bEnd;
+//                end.bTrafficType = end.bRxTrafficType = MUSB_ENDPOINT_XFER_ISOC;
+                end.wMaxPacketSizeTx = 1 << (bFifoSize & 0x0f);
+                /* shared TX/RX FIFO? */
+                if ((bFifoSize & 0xf0) == 0xf0)
+                {
+                    end.wMaxPacketSizeRx = 1 << (bFifoSize & 0x0f);
+                    end.bIsFifoShared = TRUE;
+                }
+                else
+                {
+                    end.wMaxPacketSizeRx = 1 << ((bFifoSize & 0xf0) >> 4);
+                    end.bIsFifoShared = FALSE;
+                }
+                MUSB_DPRINTF("MGC_DrcInit: MUSB_ArrayAppend2\r\n");
+                MUSB_ArrayAppend(&(pPort->LocalEnds), &end);
+            }
+        }
+        else
+        {
+            MUSB_DPRINTF("MGC_DrcInit: MUSB_ArrayInit failed\r\n");
+            MUSB_MemFree(pPort->pPrivateData);
         }
     }
     else
     {
-        MUSB_MemFree(pPort->pPrivateData);
+        MUSB_ERR_PRINTF("MGC_DrcInit: MUSB_MemAlloc failed\r\n");
     }
 
     /* select endpoint 0 */
@@ -208,37 +239,39 @@ int MGC_DrcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
     MUSB_SystemServices *pServices = pController->pSystemServices;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
 #ifdef MUSB_DMA
     pPort->bDmaCompleted = FALSE;
-    if(pPort->pDmaController && pPort->pDmaController->pfDmaControllerIsr)
+    if (pPort->pDmaController && pPort->pDmaController->pfDmaControllerIsr)
     {
-        if(pPort->pDmaController->pfDmaControllerIsr(
+        if (pPort->pDmaController->pfDmaControllerIsr(
                     pPort->pDmaController->pPrivateData))
         {
             iResult = pPort->bDmaCompleted;
         }
     }
-#endif	/* DMA enabled */
+#endif    /* DMA enabled */
 
     MUSB_NPRT("[MGC] DrcIsr %02x %02x %02x\r\n", bIntrUsbValue, wIntrTxValue, wIntrRxValue);
-    if(bIntrUsbValue)
+    if (bIntrUsbValue)
     {
         iResult = MGC_DrcUsbIsr(pPort, bIntrUsbValue);
     }
 
     /* scan for Tx endpoints requiring servicing */
     dwRegVal = wIntrTxValue;
-    if(dwRegVal && (iResult < 0))
+    if (dwRegVal && (iResult < 0))
     {
         iResult = 0;
     }
 
     /* the low bit is a special case: Tx or Rx on endpoint 0 */
-    if(dwRegVal & 1)
+    if (dwRegVal & 1)
     {
-        /*MGC_FdrcServiceDefaultEnd*/
+        // 2、endpoint0的处理函数，即: MGC_FdrcServiceDefaultEnd()
         bQueue = pPort->pfServiceDefaultEnd(pPort, &qItem);
-        if(bQueue)
+        if (bQueue)
         {
             iResult++;
 #ifdef MUSB_OVERHEAD
@@ -251,16 +284,17 @@ int MGC_DrcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
     /* scan for Tx endpoints 1-15 requiring servicing */
     iShift = 1;
     dwRegVal >>= 1;
-    while(dwRegVal)
+    while (dwRegVal)
     {
-        if(dwRegVal & 1)
+        if (dwRegVal & 1)
         {
-            /*MGC_FdrcServiceTransmitAvail*/
+            // 3、非默认endpoint0发送数据完成中断处理函数，即: MGC_FdrcServiceTransmitAvail()
             bQueue = pPort->pfServiceTransmitAvail(pPort, iShift, &qItem);
-            if(bQueue)
+            if (bQueue)
             {
                 iResult++;
                 qItem.bLocalEnd = iShift;
+                // MGC_NoneQueueBackgroundItem()
                 pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
             }
         }
@@ -270,25 +304,26 @@ int MGC_DrcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
 
     /* scan for Rx endpoints 1-15 requiring servicing */
     dwRegVal = wIntrRxValue;
-    if(dwRegVal && (iResult < 0))
+    if (dwRegVal && (iResult < 0))
     {
         iResult = 0;
     }
     iShift = 1;
     dwRegVal >>= 1;
-    while(dwRegVal)
+    while (dwRegVal)
     {
-        if(dwRegVal & 1)
+        if (dwRegVal & 1)
         {
-            /*MGC_FdrcServiceReceiveReady*/
+            // 4、非默认endpoint0接收数据完成中断处理函数，即: MGC_FdrcServiceReceiveReady()
             bQueue = pPort->pfServiceReceiveReady(pPort, iShift, &qItem);
-            if(bQueue)
+            if (bQueue)
             {
                 iResult++;
 #ifdef MUSB_OVERHEAD
                 qItem.dwTime = pController->pUtils->pfGetTime();
 #endif
                 qItem.bLocalEnd = iShift;
+                // MGC_NoneQueueBackgroundItem()
                 pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
             }
         }
@@ -305,9 +340,9 @@ int MGC_DrcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
 * or to be identified with the given endpoint descriptor (function).
 */
 MGC_EndpointResource *MGC_DrcBindEndpoint(MGC_Port *pPort,
-        const MUSB_DeviceEndpoint *pUsbEnd,
-        MUSB_EndpointResource *pRequest,
-        uint8_t bBind, uint8_t *pbIsTx)
+                      const MUSB_DeviceEndpoint *pUsbEnd,
+                      MUSB_EndpointResource *pRequest,
+                      uint8_t bBind, uint8_t *pbIsTx)
 {
     uint32_t dwEndCount;
     uint32_t dwEndIndex;
@@ -325,34 +360,45 @@ MGC_EndpointResource *MGC_DrcBindEndpoint(MGC_Port *pPort,
     uint16_t wBestDiff = 0xffff;
     uint16_t wBestReqDiff = 0xffff;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     wPacketSize = MUSB_SWAP16P((uint8_t *) & (pUsbEnd->UsbDescriptor.wMaxPacketSize));
     bIsIn = (pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_DIR_MASK) ? TRUE : FALSE;
     bIsTx = pPort->bIsHost ? !bIsIn : bIsIn;
     dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-    for(dwEndIndex = 0; dwEndIndex < dwEndCount; dwEndIndex++)
+    MUSB_DPRINTF("MGC_DrcBindEndpoint: dwEndIndex = %ld, dwEndCount = %ld\r\n", dwEndIndex, dwEndCount);
+    for (dwEndIndex = 0; dwEndIndex < dwEndCount; dwEndIndex++)
     {
         pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd = 0x%p\r\n", pEnd);
         bIsClaimed = pEnd->bIsFifoShared ?
                      pEnd->bIsClaimed : (bIsTx ? pEnd->bIsClaimed : pEnd->bRxClaimed);
-        if(pEnd && !bIsClaimed)
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->bIsFifoShared = 0x%x\r\n", pEnd->bIsFifoShared);
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->bIsClaimed = 0x%x\r\n", pEnd->bIsClaimed);
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: bIsTx = 0x%x\r\n", bIsTx);
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->bRxClaimed = 0x%x\r\n", pEnd->bRxClaimed);
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: bIsClaimed = 0x%x\r\n", bIsClaimed);
+        if (pEnd && !bIsClaimed)
         {
+            MUSB_DPRINTF("MGC_DrcBindEndpoint: pPort->bIsHost = 0x%x\r\n", pPort->bIsHost);
+            MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->wMaxPacketSizeTx = 0x%x\r\n", pEnd->wMaxPacketSizeTx);
+            MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->wMaxPacketSizeRx = 0x%x\r\n", pEnd->wMaxPacketSizeRx);
             wMaxPacketSize = bIsTx ? pEnd->wMaxPacketSizeTx : pEnd->wMaxPacketSizeRx;
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* host role: need compatible direction and try for closest FIFO size match */
                 dwDiff = wMaxPacketSize - wPacketSize;
                 dwReqDiff = wMaxPacketSize - pRequest->dwBufferSize;
-                if(dwDiff >= 0)
+                if (dwDiff >= 0)
                 {
                     /* found candidate; see if it is the best thus far */
-                    if((uint16_t)dwDiff < wBestDiff)
+                    if ((uint16_t)dwDiff < wBestDiff)
                     {
                         /* best */
                         wBestDiff = (uint16_t)dwDiff;
                         pBestEnd = pEnd;
                     }
                     /* also, see how close we are to properties requested */
-                    if((uint16_t)dwReqDiff < wBestReqDiff)
+                    if ((uint16_t)dwReqDiff < wBestReqDiff)
                     {
                         /* best */
                         wBestReqDiff = (uint16_t)dwReqDiff;
@@ -362,10 +408,16 @@ MGC_EndpointResource *MGC_DrcBindEndpoint(MGC_Port *pPort,
             }
             else
             {
+                MUSB_DPRINTF("MGC_DrcBindEndpoint: wPacketSize = 0x%x\r\n", wPacketSize);
+                MUSB_DPRINTF("MGC_DrcBindEndpoint: pEnd->bLocalEnd = 0x%x\r\n", pEnd->bLocalEnd);
+                MUSB_DPRINTF("MGC_DrcBindEndpoint: pUsbEnd->UsbDescriptor.wMaxPacketSize = 0x%x\r\n", 
+                             pUsbEnd->UsbDescriptor.wMaxPacketSize);
+                MUSB_DPRINTF("MGC_DrcBindEndpoint: pUsbEnd->UsbDescriptor.bEndpointAddress = 0x%x\r\n", 
+                             pUsbEnd->UsbDescriptor.bEndpointAddress);
                 /* function role: need address match, compatible direction and FIFO size */
                 bEnd = pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_NUMBER_MASK;
-                if((wMaxPacketSize >= wPacketSize) &&
-                        (pEnd->bLocalEnd == bEnd))
+                if ((wMaxPacketSize >= wPacketSize) &&
+                    (pEnd->bLocalEnd == bEnd))
                 {
                     /* found match */
                     pBestEnd = pEnd;
@@ -375,16 +427,21 @@ MGC_EndpointResource *MGC_DrcBindEndpoint(MGC_Port *pPort,
         }
     }
 
+    MUSB_DPRINTF("MGC_DrcBindEndpoint: pBestReqEnd = 0x%p\r\n", pBestReqEnd);
     /* see if we fulfilled desire */
-    if(pBestReqEnd)
+    if (pBestReqEnd)
     {
-        pBestEnd = pBestReqEnd;
+    	pBestEnd = pBestReqEnd;
     }
+    MUSB_DPRINTF("MGC_DrcBindEndpoint: pBestEnd = 0x%p, pBestReqEnd = 0x%p, bBind = %d\r\n", 
+            pBestEnd, pBestReqEnd, bBind);
 
     /* if we found one, set it up */
-    if(pBestEnd && bBind)
+    if (pBestEnd && bBind)
     {
-        if(pBestEnd->bIsFifoShared || bIsTx)
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: pBestReqEnd->bIsFifoShared = 0x%x, bIsTx = %d\r\n",
+                pBestReqEnd->bIsFifoShared, bIsTx);
+        if (pBestEnd->bIsFifoShared || bIsTx)
         {
             pBestEnd->bIsClaimed = TRUE;
         }
@@ -394,7 +451,8 @@ MGC_EndpointResource *MGC_DrcBindEndpoint(MGC_Port *pPort,
         }
         pBestEnd->bIsTx = bIsTx;
         pBestEnd->bIsHalted = FALSE;
-        if(bIsTx)
+        MUSB_DPRINTF("MGC_DrcBindEndpoint: bIsTx = 0x%x, bmAttributes = 0x%x\r\n", bIsTx, pUsbEnd->UsbDescriptor.bmAttributes);
+        if (bIsTx)
         {
             pBestEnd->bBusAddress = pUsbEnd->pDevice->bBusAddress;
             pBestEnd->bBusEnd = pUsbEnd->UsbDescriptor.bEndpointAddress;
@@ -432,9 +490,11 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
     uint8_t status = MUSB_STATUS_OK;
     MGC_EndpointResource *pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), 0);
 
-    if(pPort->bIsHost)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: bVal = 0x%x\r\n", bVal);
+    if (pPort->bIsHost)
     {
-        if(status || (pEnd->bIsTx && !pEnd->dwTxSize) || (!pEnd->bIsTx && !wCount))
+        if (status || (pEnd->bIsTx && !pEnd->dwTxSize) || (!pEnd->bIsTx && !wCount))
         {
             MUSB_PRT("HOST_DrcServiceDefaultEnd0\r\n");
             /* assume status phase complete */
@@ -446,12 +506,12 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
         }
 
         /* call common logic and prepare response */
-        if(!MGC_DrcServiceHostDefault(pPort, wCount, status, &bOutVal))
+        if (!MGC_DrcServiceHostDefault(pPort, wCount, status, &bOutVal))
         {
             MUSB_PRT("HOST_DrcServiceDefaultEnd1\r\n");
             /* data transfer complete; perform status phase */
             bOutVal = MGC_M_CSR0_H_STATUSPKT;
-            if(pEnd->bIsTx)
+            if (pEnd->bIsTx)
             {
                 pEnd->bIsTx = FALSE;
                 bOutVal |= MGC_M_CSR0_H_REQPKT;
@@ -466,104 +526,127 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
     }
     else
     {
-        MUSB_PRT("DEV_DrcServiceDefaultEnd\n");
+        MUSB_DPRINTF("DEV_DrcServiceDefaultEnd\n");
         /* peripheral mode: see if Rx or Tx */
-        if(bVal & MGC_M_CSR0_RXPKTRDY)
+        if (bVal & MGC_M_CSR0_RXPKTRDY)
         {
+            MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: MGC_M_CSR0_RXPKTRDY\r\n");
             pPort->bEnd0Status = FALSE;
             /* receive */
+            MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pPort->pFunctionClient = 0x%p, "
+                   "pPort->pFunctionClient->wControlBufferLength = 0x%x, "
+                   "pPort->wSetupDataIndex = 0x%x\r\n",
+                    pPort->pFunctionClient, pPort->pFunctionClient->wControlBufferLength, pPort->wSetupDataIndex);
             wSpace = pPort->pFunctionClient ?
                      (pPort->pFunctionClient->wControlBufferLength - pPort->wSetupDataIndex) : 0;
+            MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: wCount = 0x%x, wSpace = 0x%x\r\n", wCount, wSpace);
             wFifoCount = MUSB_MIN(wCount, wSpace);
             /* stall on potential overflow or get data */
-            if(!pPort->pFunctionClient || (wCount > wFifoCount))
+            if (!pPort->pFunctionClient || (wCount > wFifoCount))
             {
                 /* stall */
+                MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: send stall\r\n");
                 bOutVal |= MGC_M_CSR0_P_SENDSTALL;
             }
             else
             {
                 /* unload FIFO to the right place */
                 pFifoDest = pPort->pFunctionClient->pControlBuffer + pPort->wSetupDataIndex;
+                MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pFifoDest = 0x%p, "
+                       "pPort->pFunctionClient->pControlBuffer = 0x%p, "
+                       "pPort->wSetupDataIndex = 0x%x\r\n",
+                       pFifoDest, pPort->pFunctionClient->pControlBuffer, pPort->wSetupDataIndex);
 #ifdef MUSB_DMA
-                if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
-                            pEnd->pDmaChannel, pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
-                            pFifoDest,
-                            MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
+                if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+                    pEnd->pDmaChannel, pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
+                    pFifoDest,
+                    MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
                 {
                     /* prevent caller touching CSR0 */
                     *pwCsr = 0;
                     return TRUE;
                 }
 #endif
-                pPort->pfUnloadFifo(pPort, 0, wFifoCount, pFifoDest);
+                MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pPort->pfUnloadFifo = 0x%p\r\n", pPort->pfUnloadFifo);
+                if (pPort->pfUnloadFifo)
+                {
+                    pPort->pfUnloadFifo(pPort, 0, wFifoCount, pFifoDest);
+                }
                 pPort->wSetupDataIndex += wFifoCount;
+                MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pPort->wSetupDataIndex = 0x%x\r\n", pPort->wSetupDataIndex);
                 /* check request */
                 pRequest = (MUSB_DeviceRequest *)pPort->pFunctionClient->pControlBuffer;
-                /* if IN or we got enough OUT data, parse */
-                if((pRequest->bmRequestType & MUSB_DIR_IN) ||
-                        ((pPort->wSetupDataIndex - 8) >= MUSB_SWAP16P((uint8_t *) & (pRequest->wLength))))
+                MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pRequest = 0x%p\r\n", pRequest);
+                if (pRequest)
                 {
-                    pPort->dwSequenceNumber++;
-                    pPort->wSetupDataSize = pPort->wSetupDataIndex;
-                    pPort->wSetupDataIndex = 0;
-                    bResult = FALSE;
-                    /* if parsing enabled */
-                    if(pPort->bParse)
+                    MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pRequest->bmRequestType = 0x%x\r\n", pRequest->bmRequestType);
+                    MUSB_DPRINTF("MGC_DrcServiceDefaultEnd: pRequest->wLength = 0x%x\r\n", pRequest->wLength);
+                    /* if IN or we got enough OUT data, parse */
+                    if ((pRequest->bmRequestType & MUSB_DIR_IN) ||
+                        ((pPort->wSetupDataIndex - 8) >= MUSB_SWAP16P((uint8_t*)&(pRequest->wLength))))
                     {
-                        /* try to handle it now */
-                        if(!MGC_FunctionParseSetup(pPort, &status))
+                        pPort->dwSequenceNumber++;
+                        pPort->wSetupDataSize = pPort->wSetupDataIndex;
+                        pPort->wSetupDataIndex = 0;
+                        bResult = FALSE;
+                        /* if parsing enabled */
+                        if (pPort->bParse)
                         {
-                            /* callback */
-                            if(!pPort->pFunctionClient->pfDeviceRequest(
-                                        pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
-                                        pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
-                                        pPort->wSetupDataIndex))
+                            /* try to handle it now */
+                            if (!MGC_FunctionParseSetup(pPort, &status))
+                            {
+                                /* callback */
+                                if (!pPort->pFunctionClient->pfDeviceRequest(
+                                pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
+                                pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
+                                pPort->wSetupDataIndex))
+                                {
+                                /* client rejected immediately, so STALL */
+                                    pPort->pfDefaultEndResponse(pPort, TRUE);
+                                }
+                            }
+                            else
+                            {
+//                                printf("default stall\r\n");
+                                /* parser handled it */
+                                if (MUSB_STATUS_STALLED == status)
+                                {
+                                    pPort->wSetupDataIndex = 0;
+                                    pPort->wSetupDataSize = 0;
+                                    pPort->pfDefaultEndResponse(pPort, TRUE);
+                                }
+                                else
+                                {
+                                    pPort->pfDefaultEndResponse(pPort, FALSE);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            /* parsing disabled; issue callback */
+                            if (!pPort->pFunctionClient->pfDeviceRequest(
+                                pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
+                                pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
+                                pPort->wSetupDataIndex))
                             {
                                 /* client rejected immediately, so STALL */
                                 pPort->pfDefaultEndResponse(pPort, TRUE);
                             }
                         }
-                        else
-                        {
-                            /* parser handled it */
-                            if(MUSB_STATUS_STALLED == status)
-                            {
-                                pPort->wSetupDataIndex = 0;
-                                pPort->wSetupDataSize = 0;
-                                pPort->pfDefaultEndResponse(pPort, TRUE);
-                            }
-                            else
-                            {
-                                pPort->pfDefaultEndResponse(pPort, FALSE);
-                            }
-                        }
                     }
                     else
                     {
-                        /* parsing disabled; issue callback */
-                        if(!pPort->pFunctionClient->pfDeviceRequest(
-                                    pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
-                                    pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
-                                    pPort->wSetupDataIndex))
-                        {
-                            /* client rejected immediately, so STALL */
-                            pPort->pfDefaultEndResponse(pPort, TRUE);
-                        }
+                        /* acknowledge partial message */
+                        bOutVal = MGC_M_CSR0_P_SVDRXPKTRDY;
                     }
-                }
-                else
-                {
-                    /* acknowledge partial message */
-                    bOutVal = MGC_M_CSR0_P_SVDRXPKTRDY;
                 }
             }
         }
-        else if(!(bVal & MGC_M_CSR0_TXPKTRDY))
+        else if (!(bVal & MGC_M_CSR0_TXPKTRDY))
         {
             /* transmit-ready */
             wFifoCount = MUSB_MIN(64, (pPort->wSetupDataSize - pPort->wSetupDataIndex));
-            if(!wFifoCount)
+            if (!wFifoCount)
             {
                 /* status ack */
                 pPort->wSetupDataIndex = 0;
@@ -572,7 +655,7 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
             }
             pFifoDest = pPort->pSetupData + pPort->wSetupDataIndex;
 #ifdef MUSB_DMA
-            if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+            if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
                         pEnd->pDmaChannel, pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
                         pFifoDest,
                         MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
@@ -586,7 +669,7 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
             pPort->pfLoadFifo(pPort, 0, wFifoCount, pFifoDest);
             pPort->wSetupDataIndex += wFifoCount;
             bOutVal |= MGC_M_CSR0_TXPKTRDY;
-            if(pPort->wSetupDataIndex >= pPort->wSetupDataSize)
+            if (pPort->wSetupDataIndex >= pPort->wSetupDataSize)
             {
                 bOutVal |= MGC_M_CSR0_P_DATAEND;
                 pPort->wSetupDataIndex = 0;
@@ -603,30 +686,54 @@ uint8_t MGC_DrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
 uint32_t MGC_DrcResetPort(MGC_Port *pPort)
 {
     MGC_Controller *pController = pPort->pController;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     /* kill timer */
     MUSB_PRT("[MGC] NoneCancelTimer\r\n");
-    pController->pSystemServices->pfCancelTimer(
-        pController->pSystemServices->pPrivateData, 0);
+    if (pController->pSystemServices->pfCancelTimer)
+    {
+        pController->pSystemServices->pfCancelTimer(
+            pController->pSystemServices->pPrivateData, 0);
+    }
 
     /* turn off session */
     pPort->bWantSession = TRUE; // wangzhilei
     pPort->bFuncAddr = 0;
     MUSB_PRT("[MGC] programbusstate\r\n");
-    pPort->pfProgramBusState(pPort);
+    if (pPort->pfProgramBusState)
+    {
+        pPort->pfProgramBusState(pPort);
+    }
 
     /* stop controller */
-    pController->pfProgramStopController(pController);
+    if (pController->pfProgramStopController)
+    {
+        pController->pfProgramStopController(pController);
+    }
 
     /* flush BSR queue */
-    pController->pSystemServices->pfFlushBackgroundQueue(
-        pController->pSystemServices->pPrivateData);
+    if (pController->pSystemServices->pfFlushBackgroundQueue)
+    {
+        pController->pSystemServices->pfFlushBackgroundQueue(
+                pController->pSystemServices->pPrivateData);
+    }
+
+    MUSB_DPRINTF("MGC_DrcResetPort: MGC_DrcFlushAll\r\n");
 
     MGC_DrcFlushAll(pPort);
 
-    pController->pfProgramStartController(pController);
+    MUSB_DPRINTF("MGC_DrcResetPort: pPort->pfProgramStartController\r\n");
+    if (pController->pfProgramStartController)
+    {
+        pController->pfProgramStartController(pController);
+    }
 
-    pPort->pfReadBusState(pPort);
+    /* get current readings */
+    MUSB_DPRINTF("MGC_DrcResetPort: pPort->pfReadBusState\r\n");
+    if (pPort->pfReadBusState)
+    {
+        pPort->pfReadBusState(pPort);
+    }
 
     pPort->bWantReset = FALSE;
     pPort->bUsbState = MUSB_POWER_OFF;
@@ -652,18 +759,22 @@ static void MGC_DrcFlushAll(MGC_Port *pPort)
     void *pIrp;
     MGC_EndpointResource *pEnd;
     uint8_t *pBase = (uint8_t *)pPort->pController->pControllerAddressIst;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_PRT("[MGC] DrcFlushAll\r\n");
 
     pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
-    if(pEnd)
+    MUSB_DPRINTF("%s: pEnd = 0x%p\r\n", __FUNCTION__, pEnd);
+    if (pEnd)
         pEnd->pTxIrp = pEnd->pRxIrp = NULL;
 
     /* flush all endpoints */
     dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-    for(dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
+    for (dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
     {
-        pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
-        if(pEnd)
+        pEnd = (MGC_EndpointResource*)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
+        MUSB_DPRINTF("%s: dwEndIndex = %d, pEnd = 0x%p\r\n", __FUNCTION__, dwEndIndex, pEnd);
+        if (pEnd)
         {
             pEnd->bIsClaimed = pEnd->bRxClaimed = FALSE;
             pEnd->bIsHalted = pEnd->bIsRxHalted = FALSE;
@@ -671,16 +782,20 @@ static void MGC_DrcFlushAll(MGC_Port *pPort)
 #ifdef MUSB_DMA
             pEnd->bDmaTx = pEnd->bDmaResidual = FALSE;
 #endif
-            pPort->pfProgramFlushEndpoint(pPort, pEnd, 0, TRUE);
-            pPort->pfProgramFlushEndpoint(pPort, pEnd, MUSB_ENDPOINT_DIR_MASK, TRUE);
+    		MUSB_DPRINTF("MGC_DrcFlushAll: pPort->pfProgramFlushEndpoint = 0x%p\r\n", pPort->pfProgramFlushEndpoint);
+            if (pPort->pfProgramFlushEndpoint)
+            {
+                pPort->pfProgramFlushEndpoint(pPort, pEnd, 0, TRUE);
+                pPort->pfProgramFlushEndpoint(pPort, pEnd, MUSB_ENDPOINT_DIR_MASK, TRUE);
+            }
             wCount = MUSB_ListLength(&(pEnd->TxIrpList));
-            for(wIndex = 0; wIndex < wCount; wIndex++)
+            for (wIndex = 0; wIndex < wCount; wIndex++)
             {
                 pIrp = MUSB_ListFindItem(&(pEnd->TxIrpList), 0);
                 MUSB_ListRemoveItem(&(pEnd->TxIrpList), pIrp);
             }
             wCount = MUSB_ListLength(&(pEnd->RxIrpList));
-            for(wIndex = 0; wIndex < wCount; wIndex++)
+            for (wIndex = 0; wIndex < wCount; wIndex++)
             {
                 pIrp = MUSB_ListFindItem(&(pEnd->RxIrpList), 0);
                 MUSB_ListRemoveItem(&(pEnd->RxIrpList), pIrp);
@@ -691,6 +806,7 @@ static void MGC_DrcFlushAll(MGC_Port *pPort)
     /* select endpoint 0 */
     MGC_Write8(pBase, MGC_O_DRC_INDEX, 0);
 
+    MUSB_DPRINTF("%s out\r\n", __FUNCTION__);
 }
 
 /* OTG timer expiration */
@@ -700,15 +816,16 @@ void MGC_DrcOtgTimer(void *pParam)
     MGC_Port *pPort = pController->pPort;
     MUSB_OtgClient *pOtgClient = (MUSB_OtgClient *)pPort->pOtgClient;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->pfReadBusState(pPort);
-    switch(pPort->bOtgState)
+    switch (pPort->bOtgState)
     {
     case MUSB_B_WAIT_ACON:
-        if(pPort->bBusVoltage < MGC_VBUS_ABOVE_AVALID)
+        if (pPort->bBusVoltage < MGC_VBUS_ABOVE_AVALID)
         {
             MGC_DIAG(1, pPort->pController, "DEVICE NOT RESPONDING (A-device didn't connect)");
             /* signal error */
-            if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
+            if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
                                                       pOtgClient, MUSB_STATUS_OTG_NO_RESPONSE);
             /* back to idle state */
             MGC_DrcChangeOtgState(MUSB_AB_IDLE, pPort);
@@ -717,7 +834,7 @@ void MGC_DrcOtgTimer(void *pParam)
 
     case MUSB_B_PERIPHERAL:
     case MUSB_B_HOST:
-        if(pPort->bBusVoltage < MGC_VBUS_ABOVE_AVALID)
+        if (pPort->bBusVoltage < MGC_VBUS_ABOVE_AVALID)
             MGC_DrcChangeOtgState(MUSB_AB_IDLE, pPort);
         break;
     }
@@ -729,18 +846,18 @@ void MGC_DrcOtgTimer(void *pParam)
  */
 static uint8_t MGC_ExitingHost(uint8_t toOtg, MGC_Port *pPort)
 {
-    if(MUSB_A_SUSPEND == toOtg)
+    MUSB_DPRINTF1("%s: toOtg = 0x%x, pPort->bOtgState = 0x%x\r\n", __FUNCTION__, toOtg, pPort->bOtgState);
+    if (MUSB_A_SUSPEND == toOtg)
     {
         /* A_SUSPEND itself is not exiting host */
         return(FALSE);
     }
-    else if(MUSB_A_PERIPHERAL == toOtg)
+    else if (MUSB_A_PERIPHERAL == toOtg)
     {
         /* Only way here is from a host(suspend) */
         return(TRUE);
     }
-    else if((MUSB_A_HOST == pPort->bOtgState)
-            || (MUSB_B_HOST == pPort->bOtgState))
+    else if ((MUSB_A_HOST == pPort->bOtgState) || (MUSB_B_HOST == pPort->bOtgState))
     {
         return(TRUE);
     }
@@ -756,18 +873,24 @@ static uint8_t MGC_ExitingHost(uint8_t toOtg, MGC_Port *pPort)
 */
 static void MGC_ExitActiveUsbMode(uint8_t toOtg, MGC_Port *pPort)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_FunctionChangeState(pPort, MUSB_POWERED);
 
     MGC_DrcFlushAll(pPort);
 
     /* reset USB address value */
     pPort->bFuncAddr = 0;
-    pPort->pfProgramBusState(pPort);
+
+    if (pPort->pfProgramBusState)
+    {
+        pPort->pfProgramBusState(pPort);
+    }
 
 }   /* MGC_ExitActiveUsbMode */
 
 static void MGC_SetPowerSave(MGC_Port *pPort, uint8_t bSave)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 }
 
 /*
@@ -776,6 +899,7 @@ static void MGC_SetPowerSave(MGC_Port *pPort, uint8_t bSave)
 */
 static void MGC_StartPeripheralMode(MGC_Port *pPort)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 }   /* MGC_StartPeripheralMode */
 
 /*
@@ -787,6 +911,7 @@ static void MGC_AidlBdisTimeout(void *pParam)
     MGC_Port *pPort = pController->pPort;
     MUSB_OtgClient *pOtgClient = (MUSB_OtgClient *)pPort->pOtgClient;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     if  (pPort->bIsSuspend || pPort->bIsReset)
     {
         return;
@@ -794,7 +919,7 @@ static void MGC_AidlBdisTimeout(void *pParam)
     MGC_DIAG(1, pPort->pController, "DEVICE NOT RESPONDING (did not HNP)");
 
     /* signal error */
-    if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pOtgClient,
+    if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pOtgClient,
                                               MUSB_STATUS_OTG_NO_RESPONSE);
 
     /* change to idle (OTG 6.8.1.5) */
@@ -812,15 +937,17 @@ static void MGC_WaitSessReqTimeout(void *pParam)
     MGC_Controller *pController = (MGC_Controller *)pParam;
     MGC_Port *pPort = pController->pPort;
     MUSB_OtgClient *pOtgClient = (MUSB_OtgClient *)pPort->pOtgClient;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_PRT("[MGC] WaitSessReqTimeout\r\n");
-    if  (pPort->bIsSuspend || pPort->bIsReset)
+    if (pPort->bIsSuspend || pPort->bIsReset)
     {
         return;
     }
     MGC_DIAG(1, pPort->pController, "DEVICE NOT RESPONDING");
 
     /* signal error */
-    if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pOtgClient,
+    if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pOtgClient,
                                               MUSB_STATUS_OTG_NO_RESPONSE);
 
     /* change to idle */
@@ -838,11 +965,13 @@ static void MGC_HostResetStart(void *pParam)
     MGC_Controller *pController = (MGC_Controller *)pParam;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_PRT("[MGC] HostResetStart\r\n");
+    MUSB_DPRINTF("MGC_HostResetStart: MGC_HostResetStart = %p\r\n", MGC_HostResetStart);
     pPort->bWantReset = TRUE;
     pPort->bWantSuspend = FALSE;
 
-    //即函数 MGC_FdrcProgramBusState()
+    // 即函数 MGC_FdrcProgramBusState()
     pPort->pfProgramBusState(pPort);
 
     pController->pSystemServices->pfArmTimer(
@@ -864,25 +993,28 @@ static void MGC_HostResetComplete(void *pParam)
     MUSB_PRT("[MGC] HostResetComplete\r\n");
 
     pPort->bWantReset = FALSE;
+    // 即函数 MGC_FdrcProgramBusState()
     pPort->pfProgramBusState(pPort);
-
+    // 即函数 MGC_FdrcReadBusState()
     pPort->pfReadBusState(pPort);
-    if(pPort->bIsHighSpeed)
+    if (pPort->bIsHighSpeed)
     {
         bSpeed = MUSB_CONNECTION_SPEED_HIGH;
         MUSB_PRT("[MGC] CONNECTION_SPEED_HIGH\r\n");
     }
-    else if(pPort->bIsLowSpeed)
+    else if (pPort->bIsLowSpeed)
     {
         bSpeed = MUSB_CONNECTION_SPEED_LOW;
         MUSB_PRT("[MGC] CONNECTION_SPEED_LOW\r\n");
     }
 
+    MUSB_DPRINTF("bSpeed = %d\r\n", bSpeed);
+    /* start enumeration */
     bAddress = MGC_AllocateAddress(&(pPort->EnumerationData));
-    if(bAddress)
+    if (bAddress)
     {
         MUSB_PRT("bAddress=%d\r\n", bAddress);
-        if(!MGC_EnumerateDevice(pPort, NULL, bAddress, 0, bSpeed, NULL))
+        if (!MGC_EnumerateDevice(pPort, NULL, bAddress, 0, bSpeed, NULL))
         {
             MUSB_PRT("Insufficient memory for enumeration\r\n");
         }
@@ -904,20 +1036,21 @@ static void MGC_BSrpFailed(void *pParam)
     MGC_Port *pPort = pController->pPort;
     MUSB_OtgClient *pOtgClient = (MUSB_OtgClient *)pPort->pOtgClient;
 
-    if((MUSB_B_SRP_INIT == pPort->bOtgState) ||
-            (MUSB_AB_IDLE == pPort->bOtgState))
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if ((MUSB_B_SRP_INIT == pPort->bOtgState) ||
+        (MUSB_AB_IDLE == pPort->bOtgState))
     {
         /*
         * if b_sess_vld is true, we should be in B_PERIPHERAL state
         */
-        if(pPort->bBusVoltage >= MGC_VBUS_ABOVE_AVALID)
+        if (pPort->bBusVoltage >= MGC_VBUS_ABOVE_AVALID)
         {
             MGC_DIAG(1, pPort->pController,
                      "B_SRP_Fail: changing to B_PERIPHERAL");
 
             /* signal error */
-            if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
-                                                      pOtgClient, MUSB_STATUS_OTG_SRP_FAILED);
+            if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
+                                                   pOtgClient, MUSB_STATUS_OTG_SRP_FAILED);
         }
         else
         {
@@ -929,8 +1062,8 @@ static void MGC_BSrpFailed(void *pParam)
             MGC_DIAG(1, pPort->pController, "DEVICE NOT RESPONDING (SRP)");
 
             /* signal error */
-            if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
-                                                      pOtgClient, MUSB_STATUS_OTG_NO_RESPONSE);
+            if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
+                                                   pOtgClient, MUSB_STATUS_OTG_NO_RESPONSE);
 
             /* change to idle */
             MGC_DrcChangeOtgState(MUSB_AB_IDLE, pPort);   /* go back to quiescence */
@@ -945,12 +1078,13 @@ static void MGC_BAase0BrstTimeout(void *pParam)
     MGC_Port *pPort = pController->pPort;
     MUSB_OtgClient *pOtgClient = (MUSB_OtgClient *)pPort->pOtgClient;
 
-    if(MUSB_B_WAIT_ACON == pPort->bOtgState)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (MUSB_B_WAIT_ACON == pPort->bOtgState)
     {
         MGC_DIAG(1, pPort->pController, "DEVICE NOT RESPONDING (A-device didn't connect)");
 
         /* signal error */
-        if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
+        if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
                                                   pOtgClient, MUSB_STATUS_OTG_NO_RESPONSE);
 
         /* clear host request */
@@ -958,13 +1092,13 @@ static void MGC_BAase0BrstTimeout(void *pParam)
         pPort->pfProgramBusState(pPort);
 
         MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
-
     }
 }
 
 /** IRP completion callback for the IRP to SET_FEATURE(a_hnp_support) */
 static uint32_t MGC_SetHnpSupportIrpComplete(void *pCompleteParam, MUSB_ControlIrp *pIrp)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return 0;
 }
 
@@ -974,7 +1108,8 @@ static uint32_t MGC_SetHnpEnableIrpComplete(void *pCompleteParam, MUSB_ControlIr
     MGC_Port *pPort = (MGC_Port *)pCompleteParam;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
-    if(MUSB_STATUS_OK == pIrp->dwStatus)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (MUSB_STATUS_OK == pIrp->dwStatus)
     {
         pPort->bWantSuspend = TRUE;
         pPort->pfProgramBusState(pPort);
@@ -993,6 +1128,7 @@ static void MGC_RemoveSuspend(void *pParam)
     MGC_Controller *pController = (MGC_Controller *)pParam;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->bWantSuspend = FALSE;
     pPort->pfProgramBusState(pPort);
 }
@@ -1005,25 +1141,35 @@ void MGC_DrcChangeOtgState(uint8_t toOtg, MGC_Port *pPort)
     const MUSB_OtgDescriptor *pOtgDesc;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
-    MUSB_PRT("[MGC] DrcChangeOtgState\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #if MUSB_DIAG > 1
     pPort->pController->pfDumpControllerState(pPort->pController);
 #endif
 
-    pPort->pfReadBusState(pPort);
+    if (pPort->pfReadBusState)
+    {
+        // MGC_FdrcReadBusState()
+        pPort->pfReadBusState(pPort);
+    }
 
     /* kill scheduled event */
-    pServices->pfCancelTimer(pServices->pPrivateData, 0);
+    if (pServices->pfCancelTimer)
+    {
+        // MGC_NoneCancelTimer()
+        pServices->pfCancelTimer(pServices->pPrivateData, 0);
+    }
 
+    MUSB_DPRINTF("MGC_DrcChangeOtgState: pPort->bOtgState = 0x%x\r\n", pPort->bOtgState);
     /*
      *  If exiting peripheral or host, release held objects
      */
-    if((MGC_ExitingHost(toOtg, pPort)) || (MGC_AB_MODE(pPort->bOtgState) == MGC_AB_PERIPHERAL))
+    if ((MGC_ExitingHost(toOtg, pPort)) || (MGC_AB_MODE(pPort->bOtgState) == MGC_AB_PERIPHERAL))
     {
+    	MUSB_DPRINTF("exting host or device\r\n");
         MGC_ExitActiveUsbMode(toOtg, pPort);
     }
-
-    switch(toOtg)
+    MUSB_DPRINTF("%s: toOtg = 0x%x\r\n", __FUNCTION__, toOtg);
+    switch (toOtg)
     {
     case MUSB_AB_IDLE:
         MUSB_PRT("[MGC] AB_IDLE\r\n");
@@ -1091,13 +1237,13 @@ void MGC_DrcChangeOtgState(uint8_t toOtg, MGC_Port *pPort)
 
     case MUSB_A_SUSPEND:
         MUSB_PRT("[MGC] A_SUSPEND\r\n");
-        if(pPort->pRootDevice)
+        if (pPort->pRootDevice)
         {
             pOtgDesc = (MUSB_OtgDescriptor *)MGC_FindDescriptor(
                            (uint8_t *)pPort->pRootDevice->pCurrentConfiguration,
                            MUSB_SWAP16P((uint8_t *) & (pPort->pRootDevice->pCurrentConfiguration->wTotalLength)),
                            MUSB_DT_OTG, 0);
-            if(pOtgDesc && (pOtgDesc->bmAttributes & MUSB_OTG_HNP))
+            if (pOtgDesc && (pOtgDesc->bmAttributes & MUSB_OTG_HNP))
             {
                 MGC_SetHnpEnableIrp.pDevice = pPort->pRootDevice;
                 MGC_SetHnpEnableIrp.pCompleteParam = pPort;
@@ -1121,6 +1267,8 @@ void MGC_DrcChangeOtgState(uint8_t toOtg, MGC_Port *pPort)
     pPort->bOtgState = toOtg;
 
     MGC_CompleteOtgTransition(pPort);
+
+    MUSB_DPRINTF("%s out\r\n", __FUNCTION__);
 }   /* MGC_DrcChangeOtgState */
 
 /*
@@ -1131,17 +1279,25 @@ void MGC_CompleteOtgTransition(MGC_Port *pPort)
 {
     MUSB_OtgClient *pOtgClient = pPort->pOtgClient;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_CompleteOtgTransition: pOtgClient = 0x%p, pPort->bOtgState = 0x%x\r\n", pOtgClient, pPort->bOtgState);
     if (MGC_AB_MODE(pPort->bOtgState) == MGC_AB_PERIPHERAL)
     {
         MGC_StartPeripheralMode(pPort);
     }
 
-    if(pOtgClient)
+    if (pOtgClient)
     {
-        pOtgClient->pfOtgState(pOtgClient->pPrivateData
-                               , (MUSB_BusHandle)pPort
-                               , (MUSB_OtgState)pPort->bOtgState);
+        // MGC_MsdNewOtgState()
+        if (pOtgClient->pfOtgState)
+        {
+			pOtgClient->pfOtgState(pOtgClient->pPrivateData,
+                                   (MUSB_BusHandle)pPort,
+                                   (MUSB_OtgState)pPort->bOtgState);
+        }
     }
+
+    MUSB_DPRINTF("MGC_CompleteOtgTransition out\r\n");
 }
 
 /** Timer callback to turn off resume */
@@ -1155,21 +1311,22 @@ static void MGC_DrcCompleteResume(void *pParam)
     MGC_Controller *pController = (MGC_Controller *)pParam;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->bWantResume = FALSE;
     pPort->pfProgramBusState(pPort);
 
     /* inform drivers */
     wCount = MUSB_ListLength(&(pPort->ConnectedDeviceList));
-    for(wIndex = 0; wIndex < wCount; wIndex++)
+    for (wIndex = 0; wIndex < wCount; wIndex++)
     {
         pDevice = (MUSB_Device *)MUSB_ListFindItem(&(pPort->ConnectedDeviceList), wIndex);
-        if(pDevice)
+        if (pDevice)
         {
             pImplDevice = pDevice->pPrivateData;
-            if(pImplDevice)
+            if (pImplDevice)
             {
                 pDriver = pImplDevice->pDriver;
-                if(pDriver->pfBusSuspended)
+                if (pDriver->pfBusSuspended)
                 {
                     pDriver->pfBusResumed(pDriver->pPrivateData,
                                           (MUSB_BusHandle)pPort);
@@ -1195,80 +1352,93 @@ uint8_t MGC_DrcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
     MUSB_SystemServices *pServices;
 
     pServices = pPort->pController->pSystemServices;
-    MUSB_PRT("[MGC] DrcUsbIsr:%02x\r\n", bIntrUsbVal);
-    if(bIntrUsbVal)
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_DrcUsbIsr: pPort = 0x%p, bIntrUsbVal = 0x%x\r\n", pPort, bIntrUsbVal);
+    if (bIntrUsbVal)
     {
-        if(bIntrUsbVal & MGC_M_INTR_RESUME)
+        if (bIntrUsbVal & MGC_M_INTR_RESUME)
         {
-            MUSB_PRT("[MGC] M_INTR_RESUME\r\n");
             MGC_SetPowerSave(pPort, FALSE);
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_RESUME;
+            // MGC_NoneQueueBackgroundItem()
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_SESSREQ)
+        if (bIntrUsbVal & MGC_M_INTR_SESSREQ)
         {
-            MUSB_PRT("[MGC] M_INTR_SESSREQ\r\n");
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_SESSION_REQ;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_VBUSERROR)
+        if (bIntrUsbVal & MGC_M_INTR_VBUSERROR)
         {
-            MUSB_PRT("[MGC] M_INTR_VBUSERROR\r\n");
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_VBUS_ERROR;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_SUSPEND)
+        if (bIntrUsbVal & MGC_M_INTR_SUSPEND)
         {
-            MUSB_PRT("[MGC] M_INTR_SUSPEND\r\n");
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_SUSPEND;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_CONNECT)
+        if (bIntrUsbVal & MGC_M_INTR_CONNECT)
         {
-            MUSB_PRT("[MGC] M_INTR_CONNECT\r\n");
+        	MUSB_DPRINTF("USB connect interrupt\r\n");
             pServices->pfFlushBackgroundQueue(pServices->pPrivateData);
+            UdeviceConnectFlag = 1;
+//			msg_put(MSG_USB_HOST_ATTACH_DEVICE);
 
             pPort->bIsHost = TRUE;
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_CONNECT;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
+            MUSB_DPRINTF("USB connect interrupt end\r\n");
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_DISCONNECT)
+        if (bIntrUsbVal & MGC_M_INTR_DISCONNECT)
         {
-            MUSB_PRT("[MGC] M_INTR_DISCONNECT\r\n");
-
-            /* only handle disconnect if we are not resetting */
-            if(!pPort->bWantReset)
-            {
-                MGC_DrcFlushAll(pPort);
+        	MUSB_DPRINTF("USB disconnect interrupt: 0x%p\r\n", pServices->pfArmTimer);
+			MUSB_DPRINTF("USB disconnect interrupt\r\n");
+			memory_usage_show();
+//		    msg_put(MSG_USB_HOST_DETACH_DEVICE);
+		    /* only handle disconnect if we are not resetting */
+		    if (!pPort->bWantReset)
+		    {
+//                MGC_DrcFlushAll(pPort);
+                MUSB_Disconn_Fun(pPort->pInterfacePort);
                 MGC_FunctionChangeState(pPort, MUSB_DEFAULT);
 
                 bResult++;
                 qItem.bCause = MGC_BSR_CAUSE_DISCONNECT;
-                pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
+                if (pServices->pfQueueBackgroundItem)
+                {
+                	// MGC_NoneQueueBackgroundItem()
+                	pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
+                }
             }
+            UdeviceConnectFlag = 0;     // by gwf
+            memory_usage_show();
+            MUSB_DPRINTF("USB disconnect interrupt end\r\n");
         }
-
-        if(bIntrUsbVal & MGC_M_INTR_RESET)
+        if (bIntrUsbVal & MGC_M_INTR_RESET)
         {
-            MUSB_PRT("usb reset interrupt\r\n");
+			MUSB_DPRINTF("usb reset interrupt\r\n");
 #ifdef MUSB_STATS
             pPort->dwResetCount++;
 #endif
+            memory_usage_show();
             /* update bus state */
+            // MGC_FdrcReadBusState()
             pPort->pfReadBusState(pPort);
-
-            MUSB_PRT("reset bIsHost:%x\r\n", pPort->bIsHost);
-            if(pPort->bIsHost)
+            memory_usage_show();
+            MUSB_DPRINTF("MGC_DrcUsbIsr: reset :%x\r\n", pPort->bIsHost);
+            if (pPort->bIsHost)
             {
                 /* host mode: safe to process in the background */
                 bResult++;
@@ -1288,36 +1458,37 @@ uint8_t MGC_DrcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
                 MGC_DrcFlushAll(pPort);
                 MGC_FunctionChangeState(pPort, MUSB_DEFAULT);
                 MGC_FunctionSpeedSet(pPort);
-                switch(pPort->bOtgState)
+                MUSB_DPRINTF("MGC_DrcUsbIsr: pPort->bOtgState = 0x%x\r\n", pPort->bOtgState);
+                switch (pPort->bOtgState)
                 {
-                case MUSB_AB_IDLE:
-                    MGC_OtgStateGetId(pPort, TRUE);
-                    break;
-                case MUSB_B_SRP_INIT:
-                    MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
-                    break;
+                    case MUSB_AB_IDLE:
+                        MGC_OtgStateGetId(pPort, TRUE);
+                        break;
+                    case MUSB_B_SRP_INIT:
+                        MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
+                        break;
                 }
-
-                MUSB_PRT("---device mode--\r\n");
+			    MUSB_DPRINTF("---device mode--\r\n");
+                memory_usage_show();
             }
         }
 
-        if(bIntrUsbVal & MGC_M_INTR_SOF)
+        if (bIntrUsbVal & MGC_M_INTR_SOF)
         {
             /* update frame number */
             pPort->pfReadBusState(pPort);
 
             /* start any waiting isochronous transmits whose wait has expired */
             dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-            for(dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
+            for (dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
             {
                 pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(
                            &(pPort->LocalEnds), dwEndIndex);
-                if(pEnd && (MUSB_ENDPOINT_XFER_ISOC == pEnd->bTrafficType) &&
+                if (pEnd && (MUSB_ENDPOINT_XFER_ISOCH == pEnd->bTrafficType) &&
                         pEnd->dwWaitFrameCount)
                 {
                     pIsochIrp = (MUSB_IsochIrp *)pEnd->pTxIrp;
-                    if(0 == --pEnd->dwWaitFrameCount)
+                    if (0 == (--pEnd->dwWaitFrameCount))
                     {
                         pPort->pfProgramStartTransmit(pPort, pEnd,
                                                       pIsochIrp->pBuffer, pIsochIrp->adwLength[0], pIsochIrp);
@@ -1326,7 +1497,7 @@ uint8_t MGC_DrcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
             }
 
             /* if host, prepare any required transfers */
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 MGC_RunScheduledTransfers(pPort);
             }
@@ -1335,6 +1506,10 @@ uint8_t MGC_DrcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
 
     return bResult;
 }
+
+/*
+* Finish DRC interrupt processing
+*/
 
 //flag -- distinguishi CONNECT/DISCONNECT scanning bsr from
 //        init and read operation
@@ -1361,9 +1536,13 @@ uint32_t MGC_DrcBsr(void *pParam)
     uint32_t ReservedRetval = BSR_NONE_EVENT;
 
     bOk = pServices->pfDequeueBackgroundItem(pServices->pPrivateData, &item);
-    while(bOk)
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_DrcBsr: bOk = %d\r\n", bOk);
+    while (bOk)
     {
-        switch(item.bCause)
+    	MUSB_DPRINTF("MGC_DrcBsr: item.bCause = 0x%x\r\n", item.bCause);
+        switch (item.bCause)
         {
         case MGC_BSR_CAUSE_RESUME:
             /* resume */
@@ -1371,7 +1550,7 @@ uint32_t MGC_DrcBsr(void *pParam)
             pPort->dwResumeCount++;
 #endif
             MGC_DIAG(2, pController, "Resume Interrupt");
-            if(pPort->pFunctionClient)
+            if (pPort->pFunctionClient)
             {
                 pPort->pFunctionClient->pfUsbState(pPort->pFunctionClient->pPrivateData,
                                                    (MUSB_BusHandle)pPort,
@@ -1402,7 +1581,7 @@ uint32_t MGC_DrcBsr(void *pParam)
         case MGC_BSR_CAUSE_SESSION_REQ:
             MGC_DIAG(2, pController, "Session Request Interrupt");
             /* qualify validity of SRP */
-            if(MUSB_AB_IDLE == pPort->bOtgState)
+            if (MUSB_AB_IDLE == pPort->bOtgState)
             {
                 /* OTG 6.8.1.1 */
                 MGC_DrcChangeOtgState(MUSB_A_WAIT_BCON, pPort);
@@ -1414,7 +1593,7 @@ uint32_t MGC_DrcBsr(void *pParam)
         case MGC_BSR_CAUSE_VBUS_ERROR:
             /* only occurs to A-Dev */
             MGC_DIAG(2, pController, "Vbus Error Interrupt");
-            if(pPort->bVbusErrorRetries)
+            if (pPort->bVbusErrorRetries)
             {
                 pPort->bVbusErrorRetries--;
                 MGC_DIAG(2, pController, "Retrying due to Vbus error");
@@ -1423,7 +1602,7 @@ uint32_t MGC_DrcBsr(void *pParam)
             }
             else
             {
-                if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
+                if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData,
                                                           pOtgClient, MUSB_STATUS_OTG_VBUS_INVALID);
                 MGC_DrcChangeOtgState(MUSB_AB_IDLE, pPort);
             }
@@ -1435,16 +1614,16 @@ uint32_t MGC_DrcBsr(void *pParam)
 #endif
             MGC_DIAG(2, pController, "Suspend Interrupt");
             /* inform function client; things may change further, but that's OK */
-            if(pPort->pFunctionClient)
+            if (pPort->pFunctionClient)
             {
                 pPort->pFunctionClient->pfUsbState(pPort->pFunctionClient->pPrivateData,
                                                    (MUSB_BusHandle)pPort, MUSB_SUSPENDED);
             }
-            switch(pPort->bOtgState)
+            switch (pPort->bOtgState)
             {
             case MUSB_B_PERIPHERAL:
                 pPort->bIsSuspend = TRUE;
-                if(pPort->bIsHost)
+                if (pPort->bIsHost)
                 {
                     MGC_DrcChangeOtgState(MUSB_B_WAIT_ACON, pPort);
                 }
@@ -1485,10 +1664,10 @@ uint32_t MGC_DrcBsr(void *pParam)
             MUSB_PRT("[MGC] BSR_CAUSE_RESET\r\n");
             pPort->pfReadBusState(pPort);
 
-            if(!pPort->bIsSession)
+            if (!pPort->bIsSession)
             {
                 /* session is blown */
-                if(pPort->bBabbleRetries)
+                if (pPort->bBabbleRetries)
                 {
                     pPort->bBabbleRetries--;
                     MUSB_PRT("Retrying due to babble\r\n");
@@ -1511,36 +1690,40 @@ uint32_t MGC_DrcBsr(void *pParam)
                             &(pPort->LocalEnds), item.bLocalEnd);
 #ifdef MUSB_OVERHEAD
             pOverheadStats = MUSB_ArrayFetch(&(pPort->OverheadStats), item.bLocalEnd);
-            if(pOverheadStats)
+            if (pOverheadStats)
             {
                 dwTime = pController->pUtils->pfGetTime() - item.dwTime;
-                if(dwTime < pOverheadStats->dwOverheadMin)
+                if (dwTime < pOverheadStats->dwOverheadMin)
                 {
                     pOverheadStats->dwOverheadMin = dwTime;
                 }
-                if(dwTime > pOverheadStats->dwOverheadMax)
+                if (dwTime > pOverheadStats->dwOverheadMax)
                 {
                     pOverheadStats->dwOverheadMax = dwTime;
                 }
             }
 #endif
-            if(pLocalEnd)
+            if (pLocalEnd)
             {
                 bTrafficType = (MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause) ?
                                pLocalEnd->bTrafficType : pLocalEnd->bRxTrafficType;
-                switch(bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
+                MUSB_DPRINTF("MGC_DrcBsr: bTrafficType = 0x%x, bRxTrafficType = 0x%x\r\n",
+                        	 pLocalEnd->bTrafficType, pLocalEnd->bRxTrafficType);
+                switch (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
                 {
                 case MUSB_ENDPOINT_XFER_BULK:
                 case MUSB_ENDPOINT_XFER_INT:
                     pIrp = (MUSB_Irp *)item.pData;
-                    if(pIrp && pIrp->pfIrpComplete)
+                    if (pIrp && pIrp->pfIrpComplete)
                     {
                         ret_val = pIrp->pfIrpComplete(pIrp->pCompleteParam, pIrp);
-                        if(ret_val == 1)
+                        if (ret_val == 1)
                             ret_val = BSR_ERROR_EVENT;
-                        else if(ret_val == 2)
+                        else if (ret_val == 2)
                             ret_val = BSR_READ_OK_EVENT;
-                        else if(ret_val == MUSB_STATUS_STALLED)
+                        else if (ret_val == 2)
+                            ret_val = BSR_WRITE_OK_EVENT;
+                        else if (ret_val == MUSB_STATUS_STALLED)
                             ret_val = BSR_NONE_EVENT;
                     }
 
@@ -1548,17 +1731,17 @@ uint32_t MGC_DrcBsr(void *pParam)
 
                 case MUSB_ENDPOINT_XFER_CONTROL:
                     pControlIrp = (MUSB_ControlIrp *)item.pData;
-                    if(pControlIrp && pControlIrp->pfIrpComplete)
+                    if (pControlIrp && pControlIrp->pfIrpComplete)
                     {
                         ret_val = pControlIrp->pfIrpComplete(pControlIrp->pCompleteParam, pControlIrp);
-                        if(ret_val)
+                        if (ret_val)
                             ret_val = BSR_ERROR_EVENT;
                     }
                     break;
 
-                case MUSB_ENDPOINT_XFER_ISOC:
+                case MUSB_ENDPOINT_XFER_ISOCH:
                     pIsochIrp = (MUSB_IsochIrp *)item.pData;
-                    if(pIsochIrp && pIsochIrp->pfIrpComplete)
+                    if (pIsochIrp && pIsochIrp->pfIrpComplete)
                     {
                         pIsochIrp->pfIrpComplete(pIsochIrp->pCompleteParam,
                                                  pIsochIrp);
@@ -1566,16 +1749,16 @@ uint32_t MGC_DrcBsr(void *pParam)
                     break;
                 }
                 /* start next IRP if not started already */
-                if(MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause)
+                if (MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause)
                 {
-                    if(!pLocalEnd->pTxIrp && !pLocalEnd->bStopTx)
+                    if (!pLocalEnd->pTxIrp && !pLocalEnd->bStopTx)
                     {
                         MGC_StartNextIrp(pPort, pLocalEnd, TRUE);
                     }
                 }
                 else
                 {
-                    if((!pLocalEnd->pRxIrp || (MUSB_ENDPOINT_XFER_INT == pLocalEnd->bRxTrafficType)) &&
+                    if ((!pLocalEnd->pRxIrp || (MUSB_ENDPOINT_XFER_INT == pLocalEnd->bRxTrafficType)) &&
                             !pLocalEnd->bIsRxHalted)
                     {
                         MGC_StartNextIrp(pPort, pLocalEnd, FALSE);
@@ -1589,22 +1772,23 @@ uint32_t MGC_DrcBsr(void *pParam)
         }//end switch
 
         /* get next item to process */
-        if((BSR_READ_OK_EVENT == ret_val)
-                || (BSR_ERROR_EVENT == ret_val)
-                || (BSR_CONNECTED_EVENT == ret_val))
+        if ((BSR_READ_OK_EVENT == ret_val)
+         || (BSR_WRITE_OK_EVENT == ret_val)
+         || (BSR_ERROR_EVENT == ret_val)
+         || (BSR_CONNECTED_EVENT == ret_val))
         {
             break;
         }
 
-        if((BSR_DISCONNECT_EVENT == ret_val))
+        if ((BSR_DISCONNECT_EVENT == ret_val))
         {
             ReservedRetval = ret_val;
         }
 
         bOk = pServices->pfDequeueBackgroundItem(pServices->pPrivateData, &item);
-    }//end while()
+    }//end while ()
 
-    if(BSR_DISCONNECT_EVENT == ReservedRetval)
+    if (BSR_DISCONNECT_EVENT == ReservedRetval)
     {
         ret_val = ReservedRetval;
     }
@@ -1626,23 +1810,24 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
     MUSB_ControlIrp *pIrp = (MUSB_ControlIrp *)pEnd->pTxIrp;
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pIrp->pOutBuffer;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* any error aborts */
-    if(bStatus)
+    if (bStatus)
     {
         pIrp->dwStatus = bStatus;
         return FALSE;
     }
 
-    if(!pEnd->bIsTx)
+    if (!pEnd->bIsTx)
     {
         /* we are receiving from peripheral */
         pFifoDest = pIrp->pInBuffer + pIrp->dwActualInLength;
         wFifoCount = (uint16_t)MUSB_MIN(wCount, pIrp->dwInLength - pIrp->dwActualInLength);
 #ifdef MUSB_DMA
-        if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
-                    pEnd->pDmaChannel, pEnd->wPacketSize,
-                    pEnd->pDmaChannel->bDesiredMode, pFifoDest,
-                    MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
+        if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+            pEnd->pDmaChannel, pEnd->wPacketSize,
+            pEnd->pDmaChannel->bDesiredMode, pFifoDest,
+            MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
         {
             /* prevent caller from touching CSR0 */
             *pbCsrVal = 0;
@@ -1652,7 +1837,7 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
         /* unload FIFO */
         pPort->pfUnloadFifo(pPort, 0, wFifoCount, pFifoDest);
         pIrp->dwActualInLength += wFifoCount;
-        if((pIrp->dwActualInLength < pIrp->dwInLength) && (wCount == pEnd->wPacketSize))
+        if ((pIrp->dwActualInLength < pIrp->dwInLength) && (wCount == pEnd->wPacketSize))
         {
             bMore = TRUE;
         }
@@ -1662,21 +1847,21 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
         /* we are sending to peripheral */
         pIrp->dwActualOutLength += pEnd->dwTxSize;
         pEnd->dwTxSize = 0;
-        if(pRequest->bmRequestType & MUSB_DIR_IN)
+        if (pRequest->bmRequestType & MUSB_DIR_IN)
         {
             /* this means we just did setup; switch to IN */
             pEnd->bIsTx = FALSE;
 #ifdef MUSB_DMA
-            if(pEnd->pDmaChannel)
+            if (pEnd->pDmaChannel)
             {
                 pPort->pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
                 pEnd->pDmaChannel = pPort->pDmaController->pfDmaAllocateChannel(
                                         pPort->pDmaController->pPrivateData, 0, FALSE,
                                         MUSB_ENDPOINT_XFER_CONTROL, pEnd->wPacketSize);
-                if(pEnd->pDmaChannel)
+                if (pEnd->pDmaChannel)
                 {
                     pEnd->pDmaChannel->dwActualLength = 0L;
-                    if(!pPort->pDmaController->pfDmaProgramChannel(pEnd->pDmaChannel,
+                    if (!pPort->pDmaController->pfDmaProgramChannel(pEnd->pDmaChannel,
                             pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
                             pIrp->pInBuffer,
                             MGC_MIN(pIrp->dwInLength, pEnd->pDmaChannel->dwMaxLength)))
@@ -1689,13 +1874,13 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
 #endif
             bMore = TRUE;
         }
-        else//要发送包
+        else // 要发送包
         {
             pFifoDest = (uint8_t *)(pIrp->pOutBuffer + pIrp->dwActualOutLength);
             wFifoCount = (uint16_t)MUSB_MIN(pEnd->wPacketSize,
                                             pIrp->dwOutLength - pIrp->dwActualOutLength);
 #if 1 // special, wangzhilei
-            if((0 == wFifoCount) && (0xaa == pIrp->resv))
+            if ((0 == wFifoCount) && (0xaa == pIrp->resv))
             {
                 pIrp->resv = 0x00;
 
@@ -1710,7 +1895,7 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
 #endif
 
 #ifdef MUSB_DMA
-            if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+            if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
                         pEnd->pDmaChannel, pEnd->wPacketSize,
                         pEnd->pDmaChannel->bDesiredMode, pFifoDest,
                         MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
@@ -1721,7 +1906,7 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
             }
 #endif
             /* load FIFO and signal need to transmit */
-            if(wFifoCount)
+            if (wFifoCount)
             {
                 pPort->pfLoadFifo(pPort, 0, wFifoCount, pFifoDest);
                 pEnd->dwTxSize = wFifoCount;
@@ -1730,7 +1915,7 @@ uint8_t MGC_DrcServiceHostDefault(MGC_Port *pPort, uint16_t wCount,
         }
     }
 
-    if(bMore)
+    if (bMore)
     {
         *pbCsrVal = pEnd->bIsTx ? MGC_M_CSR0_TXPKTRDY : MGC_M_CSR0_H_REQPKT;
     }
@@ -1753,42 +1938,43 @@ uint8_t MGC_DrcAcceptDevice(MGC_Port *pPort, MUSB_Device *pDevice,
     uint8_t bOk = TRUE;
     MUSB_OtgClient *pOtgClient = pPort->pOtgClient;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* handle test device */
-    if((6666 == pDevice->DeviceDescriptor.idVendor) &&
+    if ((6666 == pDevice->DeviceDescriptor.idVendor) &&
             (0xbadd == pDevice->DeviceDescriptor.idProduct))
     {
         /* inform client */
-        if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
+        if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
                                                   MUSB_STATUS_UNSUPPORTED_DEVICE);
         bOk = FALSE;
     }
 
     /* inform client in "hubs not supported" situation */
-    if(!pPort->bIsMultipoint && (MUSB_CLASS_HUB == pDevice->DeviceDescriptor.bDeviceClass))
+    if (!pPort->bIsMultipoint && (MUSB_CLASS_HUB == pDevice->DeviceDescriptor.bDeviceClass))
     {
-        if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
+        if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
                                                   MUSB_STATUS_UNSUPPORTED_HUB);
         bOk = FALSE;
     }
 
     /* inform client if no driver found and not the above situations */
-    if(bOk && !pDriver)
+    if (bOk && !pDriver)
     {
-        if(pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
+        if (pOtgClient) pOtgClient->pfOtgError(pOtgClient->pPrivateData, pPort,
                                                   MUSB_STATUS_UNSUPPORTED_DEVICE);
         bOk = FALSE;
     }
 
-    if(bOk)
+    if (bOk)
     {
         /* if we are A-device, set a_hnp_support if device supports HNP */
-        if(!pPort->bConnectorId && pPort->pRootDevice)
+        if (!pPort->bConnectorId && pPort->pRootDevice)
         {
             pOtgDesc = (MUSB_OtgDescriptor *)MGC_FindDescriptor(
                            (uint8_t *)pPort->pRootDevice->pCurrentConfiguration,
                            MUSB_SWAP16P((uint8_t *) & (pPort->pRootDevice->pCurrentConfiguration->wTotalLength)),
                            MUSB_DT_OTG, 0);
-            if(pOtgDesc && (pOtgDesc->bmAttributes & MUSB_OTG_HNP))
+            if (pOtgDesc && (pOtgDesc->bmAttributes & MUSB_OTG_HNP))
             {
                 MGC_SetHnpSupportIrp.pDevice = pPort->pRootDevice;
                 MGC_SetHnpSupportIrp.pCompleteParam = pPort;
@@ -1808,8 +1994,9 @@ void MGC_DrcFinishResume(MGC_Port *pPort)
 {
     uint32_t dwTimeout = 1;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->pfReadBusState(pPort);
-    if(pPort->bIsHost)
+    if (pPort->bIsHost)
     {
         /* continue driving resume for 20 ms */
         dwTimeout = 2;
@@ -1828,10 +2015,11 @@ uint32_t MGC_DrcSetHostPower(MGC_Controller *pController,
     uint32_t result = MUSB_STATUS_INVALID_ARGUMENT;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->wHostMaxPower = wPower;
     pPort->pfReadBusState(pPort);
 
-    if(pPort->bConnectorId)
+    if (pPort->bConnectorId)
     {
         result = MUSB_STATUS_OK;
     }
@@ -1847,9 +2035,16 @@ uint32_t MGC_DrcSetHostPower(MGC_Controller *pController,
  */
 static void MGC_OtgStateGetId(MGC_Port *pPort, uint8_t bIsReset)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_OtgStateGetId: pPort->bIsHost=%x, pPort->bconnectorID=%x, bIsreset=%x\r\n",
+        pPort->bIsHost, pPort->bConnectorId, bIsReset);
     pPort->bWantSuspend = FALSE;
     pPort->bWantSession = TRUE;
-    pPort->pfProgramBusState(pPort);
+    MUSB_DPRINTF("MGC_OtgStateGetId: pPort->pfProgramBusState = 0x%p\r\n", pPort->pfProgramBusState);
+    if (pPort->pfProgramBusState)
+    {
+        pPort->pfProgramBusState(pPort);
+    }
 
     /*
     * Per UTMI+, the PHY has 50 ms to read the connector ID.
@@ -1857,15 +2052,17 @@ static void MGC_OtgStateGetId(MGC_Port *pPort, uint8_t bIsReset)
     * However, the core already does this, and if we wait, we will fall behind
     * processing the interrupts from the core.
     */
-    MUSB_PRT("[MGC] otgstatus, bIsHost=%x, bconnectorID=%x,bIsreset=%x\r\n",
-             pPort->bIsHost, pPort->bConnectorId, bIsReset);
-    pPort->pfReadBusState(pPort);
-
-    if(!pPort->bIsHost)
+    MUSB_DPRINTF("pPort->pfReadBusState = 0x%p\r\n", pPort->pfReadBusState);
+    if (pPort->pfReadBusState)
     {
-        if(pPort->bConnectorId)
+        pPort->pfReadBusState(pPort);
+    }
+
+    if (!pPort->bIsHost)
+    {
+        if (pPort->bConnectorId)
         {
-            if(bIsReset)
+            if (bIsReset)
             {
                 MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
             }
@@ -1892,34 +2089,35 @@ MUSB_BusHandle MUSB_RegisterOtgClient(MUSB_Port *pPort,
     MUSB_OtgDescriptor *pOtgDesc = NULL;
     uint32_t dwStatus = 0;
     void *pResult = NULL;
-
+    // 指向的是MGC_Controllerwrapper结构体中的成员变量 MGC_Port PortImpl
     MGC_Port *pImplPort = (MGC_Port *)pPort->pPrivateData;
 
-    MUSB_PRT("[MGC] RegisterOtgClient\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MUSB_RegisterOtgClient\r\n");
     /* session still active? */
-    if(!pImplPort->bSessionActive)
+    if (!pImplPort->bSessionActive)
     {
         /* host client just has callbacks */
         pImplPort->pHostClient = pHostClient;
 
-        if(pFunctionClient)
+        if (pFunctionClient)
         {
             /* function client requires verification */
             dwStatus = MGC_FunctionRegisterClient(pImplPort, pFunctionClient);
-            MUSB_PRT("[MGC] FunctionRegisterClient_dwStatus=%x\r\n", dwStatus);
+            MUSB_DPRINTF("MUSB_RegisterOtgClient: dwStatus = 0x%lx\r\n", dwStatus);
         }
 
-        if(0 == dwStatus)
+        if (0 == dwStatus)
         {
             /* OK; scan for OTG descriptor and set flag for HNP capability */
             pImplPort->bIsHnpSupported = FALSE;
-            if(pFunctionClient)
+            if (pFunctionClient)
             {
                 pOtgDesc = (MUSB_OtgDescriptor *)MGC_FindDescriptor(
                                pFunctionClient->pStandardDescriptors,
                                pFunctionClient->wDescriptorBufferLength, MUSB_DT_OTG, 0);
             }
-            if(pOtgDesc)
+            if (pOtgDesc)
             {
                 pImplPort->bIsHnpSupported = (pOtgDesc->bmAttributes & MUSB_OTG_HNP) ? TRUE : FALSE;
             }
@@ -1936,13 +2134,12 @@ MUSB_BusHandle MUSB_RegisterOtgClient(MUSB_Port *pPort,
             pImplPort->bSessionActive = TRUE;
 
             pImplPort->bWantSession = TRUE;//HOST
-            pImplPort->bWantHost    = TRUE;// wangzhilei
+            pImplPort->bWantHost    = TRUE;
             MGC_OtgStateGetId(pImplPort, FALSE);
 
             /* set return value */
             pResult = pImplPort;
         }
-
     }
 
     return pResult;
@@ -1957,8 +2154,9 @@ void MUSB_RelinquishHost(MUSB_BusHandle hBus)
     MGC_Controller *pController = (MGC_Controller *)pPort->pController;
     MUSB_SystemServices *pServices = pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->bRelinquish = TRUE;
-    if(!pPort->bConnectorId)
+    if (!pPort->bConnectorId)
     {
         MGC_DrcChangeOtgState(MUSB_A_SUSPEND, pPort);
     }
@@ -1980,18 +2178,24 @@ uint8_t MUSB_RequestBus(MUSB_BusHandle hBus)
 {
     MGC_Port *pPort = (MGC_Port *)hBus;
 
-    switch(pPort->bOtgState)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    switch (pPort->bOtgState)
     {
     case MUSB_AB_IDLE:
         MGC_OtgStateGetId(pPort, FALSE);
         return TRUE;
     }
-    if(!pPort->bIsSession)
+    if (!pPort->bIsSession)
     {
         MGC_OtgStateGetId(pPort, FALSE);
         return TRUE;
     }
     return FALSE;
+}
+
+uint8_t MUSB_GetConnect_Flag(void)
+{
+    return UdeviceConnectFlag;
 }
 
 /*this fun is called by main() after connect msg is received*/
@@ -2000,27 +2204,20 @@ void MUSB_Start_Fun(void *pParam)
     MUSB_Port *pIfacePort = (MUSB_Port *)pParam;
     MGC_Port *pPort = (MGC_Port *)pIfacePort->pPrivateData;
 
-    MUSB_PRT("[MGC] Start_Fun\r\n");
-
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("%s: pParam = 0x%p\r\n", __FUNCTION__, pParam);
     pPort->pfReadBusState(pPort);
     pPort->pRootDevice = NULL;
-    if((MUSB_B_WAIT_ACON == pPort->bOtgState)
-            || (MUSB_B_PERIPHERAL == pPort->bOtgState))
+    if ((MUSB_B_WAIT_ACON == pPort->bOtgState) || (MUSB_B_PERIPHERAL == pPort->bOtgState))
     {
-        MUSB_PRT("[MGC] Start_Fun b peripheral\r\n");
+    	MUSB_DPRINTF("MUSB_Start_Fun: MUSB_B_HOST\r\n");
         MGC_DrcChangeOtgState(MUSB_B_HOST, pPort);
     }
     else
     {
-        MUSB_PRT("[MGC] Start_Fun a host\r\n");
+    	MUSB_DPRINTF("MUSB_Start_Fun: MUSB_A_HOST\r\n");
         MGC_DrcChangeOtgState(MUSB_A_HOST, pPort);
     }
-}
-
-uint8_t MUSB_GetConnect_Flag(void)
-{
-    MUSB_PRT("[MGC] MUSB_GetConnect_Flag will be implementated. Exceptional\r\n");
-    return 0;
 }
 
 void MUSB_Disconn_Fun(void *pParam)
@@ -2028,40 +2225,48 @@ void MUSB_Disconn_Fun(void *pParam)
     MUSB_Port *pIfacePort = (MUSB_Port *)pParam;
     MGC_Port *pPort = (MGC_Port *)pIfacePort->pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (UdeviceConnectFlag == 0)
+    {
+        return;
+    }
     MGC_DrcResetPort(pPort);
 
     /* unequivocally clear this state */
     pPort->bIsSuspend = FALSE;
-
-    MUSB_PRT("[MGC] Disconn_Fun:%x\r\n", pPort->bOtgState);
+    MUSB_DPRINTF("MUSB_Disconn_Fun: pPort->bOtgState = 0x%x\r\n", pPort->bOtgState);
+    /* clean up host state */
     MGC_HostDestroy(pPort);
-    MUSB_PRT("[MGC] Disconn_Fun:%x\r\n", pPort->bOtgState);
-
-    switch(pPort->bOtgState)
+    MUSB_DPRINTF("MUSB_Disconn_Fun: pPort->bOtgState = 0x%x\r\n", pPort->bOtgState);
+    switch (pPort->bOtgState)
     {
-    case MUSB_A_HOST:
-        MUSB_DeviceDisconnected(pPort->pRootDevice);
-        MGC_DrcChangeOtgState(MUSB_A_WAIT_BCON, pPort);
-        break;
-
-    case MUSB_A_SUSPEND:
-        if(pPort->bRelinquish && (MUSB_STATUS_OK == MGC_SetHnpEnableIrp.dwStatus))
-        {
+        case MUSB_A_HOST:
             MUSB_DeviceDisconnected(pPort->pRootDevice);
-            MGC_DrcChangeOtgState(MUSB_A_PERIPHERAL, pPort);
-        }
-        else
-        {
             MGC_DrcChangeOtgState(MUSB_A_WAIT_BCON, pPort);
-        }
-        break;
+            memory_usage_show();
+            break;
 
-    case MUSB_B_HOST:
-        MUSB_DeviceDisconnected(pPort->pRootDevice);
-        MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
-        break;
+        case MUSB_A_SUSPEND:
+            if (pPort->bRelinquish && (MUSB_STATUS_OK == MGC_SetHnpEnableIrp.dwStatus))
+            {
+                MUSB_DeviceDisconnected(pPort->pRootDevice);
+                    /* OTG 6.8.1.5 */
+                MGC_DrcChangeOtgState(MUSB_A_PERIPHERAL, pPort);
+            }
+            else
+            {
+                MGC_DrcChangeOtgState(MUSB_A_WAIT_BCON, pPort);
+            }
+                memory_usage_show();
+            break;
+
+        case MUSB_B_HOST:
+            MUSB_DeviceDisconnected(pPort->pRootDevice);
+            MGC_DrcChangeOtgState(MUSB_B_PERIPHERAL, pPort);
+            break;
     }
     pPort->pRootDevice = NULL;
+    MUSB_DPRINTF("%s out\r\n", __FUNCTION__);
 }
 
 #if MUSB_DIAG > 0

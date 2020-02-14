@@ -11,6 +11,7 @@
 #include <finsh.h>
 #include <rtdef.h>
 
+#ifdef SARADC_VBAT_DETECT
 #include "saradc_intf.h"
 #include "sys_ctrl_pub.h"
 
@@ -65,11 +66,6 @@ static void vbat_detect_config(void)
     adc_obj_start(&vbat);
 }
 
-int vbat_voltage_get(void)
-{
-        return vbat_det_st.mean_vol;
-}
-
 int vbat_detect_test(void)
 {
 	saradc_work_create(20);
@@ -77,3 +73,4 @@ int vbat_detect_test(void)
 	return 0;
 }
 INIT_APP_EXPORT(vbat_detect_test);
+#endif

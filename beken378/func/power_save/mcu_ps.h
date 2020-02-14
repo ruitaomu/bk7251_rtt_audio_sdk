@@ -11,12 +11,24 @@
 
 #endif
 
-#define     MS_TO_TICK      (1000 / RT_TICK_PER_SECOND)
-
-extern void ps_pwm0_disable(void );
-extern void ps_pwm0_enable(void);
-extern void ps_timer3_disable(void);
-extern void ps_timer3_enable(UINT32 );
+typedef struct
+{
+#if (CFG_SUPPORT_ALIOS)
+    UINT64 first_tick;
+#else
+    UINT32 first_tick;
+#endif
+    UINT64 first_tsf;
+} MCU_PS_TSF;
+typedef struct
+{
+#if (CFG_SUPPORT_ALIOS)
+    UINT64 fclk_tick;
+#else
+    UINT32 fclk_tick;
+#endif
+    UINT64 machw_tm;
+} MCU_PS_MACHW_TM;
 
 #endif
 

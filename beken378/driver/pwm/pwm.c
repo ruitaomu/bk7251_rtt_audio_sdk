@@ -182,6 +182,22 @@ static UINT16 pwm_capture_value_get(UINT8 ucChannel)
     return REG_READ(REG_APB_BK_PWMn_CAP_ADDR(ucChannel));
 }
 
+static void pwm_set_duty_cycle(UINT8 ucChannel, UINT32 u32DutyCycle)
+{
+    #if (CFG_SOC_NAME == SOC_BK7231)
+    #else
+    REG_WRITE(REG_APB_BK_PWMn_DC_ADDR(ucChannel), u32DutyCycle);
+    #endif
+}
+
+static void pwm_set_end_value(UINT8 ucChannel, UINT32 u32EndValue)
+{
+    #if (CFG_SOC_NAME == SOC_BK7231)
+    #else
+    REG_WRITE(REG_APB_BK_PWMn_END_ADDR(ucChannel), u32EndValue);
+    #endif
+}
+
 static void pwm_int_handler_clear(UINT8 ucChannel)
 {
     p_PWM_Int_Handler[ucChannel] = NULL;
@@ -189,6 +205,8 @@ static void pwm_int_handler_clear(UINT8 ucChannel)
 
 void pwm_init(void)
 {
+    REG_WRITE(PWM_CTL, 0x0);
+
     intc_service_register(IRQ_PWM, PRI_IRQ_PWM, pwm_isr);
 
     sddev_register_dev(PWM_DEV_NAME, &pwm_op);
@@ -220,7 +238,7 @@ UINT32 pwm_ctrl(UINT32 cmd, void *param)
         value |= (1 << (ucChannel * 4));
         REG_WRITE(PWM_CTL, value);
         break;
-    case CMD_PWM_UINT_DISABLE:
+    case CMD_PWM_UNIT_DISABLE:
         ucChannel = (*(UINT32 *)param);
         if(ucChannel > 5)
         {
@@ -266,9 +284,27 @@ UINT32 pwm_ctrl(UINT32 cmd, void *param)
         p_param = (pwm_param_t *)param;
         init_pwm_param(p_param, 1);
         break;
+    case CMD_PWM_SET_DUTY_CYCLE:
+        p_param = (pwm_param_t *)param;
+        if(p_param->channel >= PWM_COUNT)
+        {
+            ret = PWM_FAILURE;
+            break;
+        }
+        pwm_set_duty_cycle(p_param->channel, p_param->duty_cycle);
+        break;
+    case CMD_PWM_SET_END_VALUE:
+        p_param = (pwm_param_t *)param;
+        if(p_param->channel >= PWM_COUNT)
+        {
+            ret = PWM_FAILURE;
+            break;
+        }
+        pwm_set_end_value(p_param->channel, p_param->end_value);
+        break;
     case CMD_PWM_CAP_GET:
         p_capture = (pwm_capture_t *)param;
-        if(p_capture->ucChannel > 5)
+        if(p_capture->ucChannel >= PWM_COUNT)
         {
             ret = PWM_FAILURE;
             break;

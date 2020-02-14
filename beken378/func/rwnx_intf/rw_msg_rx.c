@@ -245,6 +245,9 @@ void mhdr_disconnect_ind(void *msg)
     disc = (struct sm_disconnect_ind *)msg_ptr->param;
 
     mhdr_set_station_status(MSG_CONN_FAIL);
+#if (CFG_SOC_NAME != SOC_BK7231)
+    bk_cal_init(0);
+#endif
 
     sa_reconnect_init();
 
@@ -265,7 +268,9 @@ void mhdr_connect_ind(void *msg, UINT32 len)
     {
         os_printf("---------SM_CONNECT_IND_ok\r\n");
         mhdr_set_station_status(MSG_CONN_SUCCESS);
-
+#if (CFG_SOC_NAME != SOC_BK7231)
+        bk_cal_init(1);
+#endif
         if(assoc_cfm_cb.cb)
         {
             (*assoc_cfm_cb.cb)(assoc_cfm_cb.ctxt_arg, conn_ind_ptr->vif_idx);

@@ -21,6 +21,7 @@
 MUSB_PipePtr MUSB_BindFunctionEnd(MUSB_BusHandle hBus,
                                   const MUSB_EndpointDescriptor *pEndDesc)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     return NULL;
 
@@ -28,5 +29,5 @@ MUSB_PipePtr MUSB_BindFunctionEnd(MUSB_BusHandle hBus,
 
 void MUSB_CloseFunctionPipe(MUSB_PipePtr hPipe)
 {
-
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 }

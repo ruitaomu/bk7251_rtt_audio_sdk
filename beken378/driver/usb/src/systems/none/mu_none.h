@@ -81,7 +81,16 @@ typedef struct
  */
 typedef uint8_t (*MUSB_NoneIsr)(void *pPrivateData);
 
+/**************************** GLOBALS *****************************/
+
+/**
+ * Board-specific array of controller information;
+ * defined in board.h.
+ * PCI-based controllers should all come before any hard-wired ones
+ */
 extern MUSB_NoneController MUSB_aNoneController[];
+
+/*************************** FUNCTIONS ****************************/
 
 /**
  * Target-specific code should call this from its main loop.
@@ -168,7 +177,13 @@ extern uint8_t MUSB_BoardInitTimers(void *pPrivateData, uint16_t wTimerCount,
 extern void MUSB_BoardDestroyController(void *pPrivateData);
 
 /**
+ * Board-specific background processing
+ * @param pPrivateData result of a successful call to MUSB_BoardInitController
+ * on the corresponding controller
+ */
 extern void MUSB_BoardRunBackground(void* pPrivateData);
+
+/**
  * Board-specific timer arm
  * @param pPrivateData result of a successful call to MUSB_BoardInitController
  * on the corresponding controller

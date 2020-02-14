@@ -36,7 +36,7 @@
 extern void delay100us(INT32 num);	
 
 #define EJPEG_DMA_CHNAL             GDMA_CHANNEL_5
-#define EJPEG_DELAY_HTIMER_CHNAL    3
+#define EJPEG_DELAY_HTIMER_CHNAL    5
 #define EJPEG_DELAY_HTIMER_VAL      (2)  // 2ms
 #define USE_JTAG_FOR_DEBUG          1
 
@@ -382,19 +382,19 @@ static void camera_intf_config_senser(void)
 }
 void init_camera_resetpin(void)
 {
-    bk_gpio_config_output(CAMERA_RESET_GPIO_INDEX);  
-    bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
+    //bk_gpio_config_output(CAMERA_RESET_GPIO_INDEX);  
+    //bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
 }
 
 void camera_reset(void)
 {
-    bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
-    delay100us(10);													// 1ms
-    bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_LOW_VAL);
-    delay100us(10);													// 1=1ms,
-    bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
-    delay100us(10);													// 1ms
-    CAMERA_INTF_WPRT("Camera Reset\r\n");
+    //bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
+    //delay100us(10);													// 1ms
+    //bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_LOW_VAL);
+    //delay100us(10);													// 1=1ms,
+    //bk_gpio_output(CAMERA_RESET_GPIO_INDEX, CAMERA_RESET_HIGH_VAL);
+    //delay100us(10);													// 1ms
+    //CAMERA_INTF_WPRT("Camera Reset\r\n");
 }
 
 void camera_flip(UINT8 n)
@@ -434,7 +434,7 @@ void camera_intfer_init(void* data)
     camera_intf_config_ejpeg(data);
 
     ejpeg_hdl = ddev_open(EJPEG_DEV_NAME, &status, (UINT32)&ejpeg_cfg);
-    camera_reset();
+    //camera_reset();
     
     oflag = I2C_DEF_DIV;
     #if USE_JTAG_FOR_DEBUG
@@ -487,9 +487,9 @@ UINT32 camera_intfer_set_video_param(UINT32 ppi_type, UINT32 pfs_type)
     {
         camera_inf_cfg_gc0328c_fps(pfs_type);
     }
-
-    return 0;
     #endif
+    return 0;
+
 }
 /*---------------------------------------------------------------------------*/
 

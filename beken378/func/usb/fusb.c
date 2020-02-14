@@ -6,25 +6,31 @@
 #include "drv_model_pub.h"
 #include "sys_rtos.h"
 #include "bk_rtos_pub.h"
+#include "task.h"
 #include "diskio.h"
 #include "usb_pub.h"
+#include "sdcard_pub.h"
 
 #if CFG_USB
+
+
+#ifdef FUSB_ENABLE_USER_MAIN
+
 volatile int g_usb_flag = 0;
-xTaskHandle  usb_test_thread_handle;
+xTaskHandle  usb_host_test_thread_handle;
 
 extern void test_mount(DISK_NUMBER number);
 extern void scan_file_system(DISK_NUMBER number);
 extern void test_fatfs(DISK_NUMBER number);
 
-static void usb_test_thread_main( void *arg )
+static void usb_host_test_udisk_thread_main( void *arg )
 {
-    FUSB_PRT("usb_test_thread_main\r\n");
+    FUSB_PRT("usb_host_test_udisk_thread_main\r\n");
     while (1)
     {
         if (MUSB_GetConnect_Flag())
         {
-            FUSB_PRT("usb_test_thread_main: Udisk Connected\r\n");
+            FUSB_PRT("usb_host_test_udisk_thread_main: Udisk Connected\r\n");
             if (g_usb_flag == 0)
             {
                 g_usb_flag = 1;
@@ -46,10 +52,11 @@ static void usb_test_thread_main( void *arg )
         }
         else
         {
-            FUSB_PRT("usb_test_thread_main: Udisk Disconnected\r\n");
+            FUSB_PRT("usb_host_test_udisk_thread_main: Udisk Disconnected\r\n");
         }
     }
 }
+#endif
 
 UINT32 fusb_init(void)
 {
@@ -57,8 +64,13 @@ UINT32 fusb_init(void)
     UINT32 status;
     UINT32 op_flag;
     DD_HANDLE usb_handler;
+#if CFG_USE_USB_DEVICE_CARD_READER
+    DD_HANDLE sdcard_handler;
+#endif
 
     ret = FUSB_SUCCESS;
+
+    FUSB_PRT("fusb_init\r\n");
 
 #ifdef FMSC_TEST
     fmsc_test_init();
@@ -67,7 +79,11 @@ UINT32 fusb_init(void)
 #else
 #endif
 
+#if CFG_USE_USB_HOST
     op_flag = USB_HOST_MODE;
+#elif CFG_USE_USB_DEVICE
+    op_flag = USB_DEVICE_MODE;
+#endif
     usb_handler = ddev_open(USB_DEV_NAME, &status, op_flag);
     if(DD_HANDLE_UNVALID == usb_handler)
     {
@@ -77,12 +93,23 @@ UINT32 fusb_init(void)
     {
         FUSB_PRT("usb_open_success\r\n");
     }
+    
+#if CFG_USE_USB_DEVICE_CARD_READER
+    sdcard_handler = ddev_open(SDCARD_DEV_NAME, &status, 0);
+    if(DD_HANDLE_UNVALID == sdcard_handler){
+        FUSB_PRT("sdcard_open_failed\r\n");
+    }
+    else if(SDCARD_SUCCESS == status)
+    {
+        FUSB_PRT("sdcard_open_success\r\n");
+    }
+#endif
 
 #ifdef FUSB_ENABLE_USER_MAIN
-    ret = bk_rtos_create_thread(&usb_test_thread_handle,
+    ret = bk_rtos_create_thread(&usb_host_test_thread_handle,
                              5,
-                             "usb_test_thread",
-                             (beken_thread_function_t)usb_test_thread_main,
+                             "usb_host_test_thread",
+                             (beken_thread_function_t)usb_host_test_udisk_thread_main,
                              (unsigned short)2048,
                              (beken_thread_arg_t)0);
 #endif // FUSB_ENABLE_USER_MAIN

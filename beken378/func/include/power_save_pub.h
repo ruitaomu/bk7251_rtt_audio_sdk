@@ -33,6 +33,11 @@ typedef enum {
 	PS_BMSG_IOCTL_RF_KP_HANDLER = 7,
 	PS_BMSG_IOCTL_RF_TD_HANDLER = 8,
 	PS_BMSG_IOCTL_RF_KP_STOP = 9,
+	PS_BMSG_IOCTL_WAIT_TM_SET = 10,
+	PS_BMSG_IOCTL_WAIT_TM_HANDLER = 11,
+	PS_BMSG_IOCTL_RF_PS_TIMER_INIT = 12,
+	PS_BMSG_IOCTL_RF_PS_TIMER_DEINIT = 13,
+	
 } PS_BMSG_IOCTL_CMD;
 
 #define ICU_BASE                                     (0x00802000)
@@ -47,11 +52,9 @@ typedef enum {
 enum
 {
     NEED_DISABLE = 0,
-    NEED_ME_DISABLE = 1,
-    NEED_REBOOT = 2,
+    NEED_REBOOT = 1,
 };
 #define NEED_DISABLE_BIT            CO_BIT(NEED_DISABLE) 
-#define NEED_ME_DISABLE_BIT         CO_BIT(NEED_ME_DISABLE) 
 #define NEED_REBOOT_BIT             CO_BIT(NEED_REBOOT) 
 
 typedef enum { 
@@ -63,6 +66,7 @@ typedef enum {
 	PS_FORBID_BMSG_ON = 6,
 	PS_FORBID_TXING = 7, 
 	PS_FORBID_HW_TIMER = 8, 
+    PS_FORBID_RXING = 9,
 } PS_FORBID_STATUS;
 
 typedef enum { 
@@ -74,6 +78,21 @@ typedef enum {
 	PS_DTIM_PS_CLOSING = 5, 	
 } PS_MODE_STATUS;
 
+
+#define  PRINT_LR_REGISTER()                \
+{                                           \
+                                            \
+    uint32_t value;                         \
+                                            \
+    __asm volatile(                         \
+		"MOV %0,lr\n"                       \
+		:"=r" (value)                       \
+		:                                   \
+		:"memory"                           \
+	);                                      \
+                                            \
+	os_printf("lr:%x\r\n", value);          \
+}
 
 extern UINT8 power_save_if_ps_can_sleep(void);
 extern UINT16 power_save_forbid_trace(PS_FORBID_STATUS forbid);
@@ -121,9 +140,9 @@ extern UINT8 power_save_get_liston_int(void);
 extern int power_save_get_wkup_less_time();
 extern void power_save_set_linger_time(UINT32);
 extern void power_save_dtim_wake(UINT32 );
-extern UINT32 power_save_use_timer0(void);
+extern UINT32 power_save_use_pwm_isr(void);
 extern void power_save_td_ck_timer_set(void);
-extern void power_save_pwm0_isr(UINT8 param);
+extern void power_save_pwm_isr(UINT8 param);
 extern void power_save_keep_timer_set(void);
 extern void power_save_keep_timer_real_handler();
 extern void power_save_td_ck_timer_real_handler();
@@ -131,23 +150,58 @@ extern void power_save_keep_timer_stop(void);
 extern UINT32 power_save_get_sleep_count(void);
 extern void power_save_set_reseted_flag(void);
 extern void power_save_set_keep_timer_time(UINT32);
+extern void ps_set_rf_prevent(void);
+extern void ps_clear_rf_prevent(void);
 
 
 
 /***************************************************************************/
-#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP()                              \
+/***************************************************************************/
+#if ((1 == CFG_USE_STA_PS))
+#define CHECK_STA_BLE_RF_IF_IN_SLEEP()                                  \
     do {                                                                \
-    GLOBAL_INT_DECLARATION();                                           \
-    GLOBAL_INT_DISABLE();                                               \
-    if (power_save_if_rf_sleep())                                       \
+    ps_set_rf_prevent();                                                \
+    power_save_rf_dtim_manual_do_wakeup();                              \
+                                                                        \
+	if (sctrl_if_rf_sleep())                                            \
     {                                                                   \
-        GLOBAL_INT_RESTORE();                                           \
-        break;                                                          \
+        sctrl_rf_wakeup();                                              \
+    }
+#endif
+
+#define CHECK_STA_BLE_RF_IF_IN_SLEEP_END()                              \
+    ps_clear_rf_prevent();                                              \
+    } while(0)
+
+
+#define CHECK_RF_IF_IN_SLEEP_END()                                      \
+    } while(0)
+
+#define CHECK_RF_IF_IN_SLEEP()                                          \
+    do {                                                                \
+    if (sctrl_if_rf_sleep())                                            \
+    {                                                                   \
+        sctrl_rf_wakeup();                                              \
     }
 
-#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END()                          \
-    GLOBAL_INT_RESTORE();                                               \
-    } while(0)                                                          
+#if CFG_USE_BLE_PS
+#define CHECK_BLE_RF_IF_IN_SLEEP()          CHECK_RF_IF_IN_SLEEP()
+#endif
+/***************************************************************************/
+
+#if((0 == CFG_USE_BLE_PS) && (0 == CFG_USE_STA_PS))
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP()
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END()
+#elif (CFG_USE_BLE_PS && (0 == CFG_USE_STA_PS))
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP()      CHECK_BLE_RF_IF_IN_SLEEP()
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END()  CHECK_RF_IF_IN_SLEEP_END()
+#elif ((1 == CFG_USE_STA_PS))
+#define CHECK_NEED_WAKE_IF_STA_IN_SLEEP()      CHECK_STA_BLE_RF_IF_IN_SLEEP()
+#define CHECK_NEED_WAKE_IF_STA_IN_SLEEP_END()  CHECK_STA_BLE_RF_IF_IN_SLEEP_END()
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP()      CHECK_RF_IF_IN_SLEEP()
+#define CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END()  CHECK_RF_IF_IN_SLEEP_END()
+#endif
+                                                  
 /***************************************************************************/
 
 #endif // _POWER_SAVE_PUB_H_

@@ -10,11 +10,13 @@
 enum
 {
     CMD_PWM_UNIT_ENABLE = PWM_CMD_MAGIC + 1,
-    CMD_PWM_UINT_DISABLE,
+    CMD_PWM_UNIT_DISABLE,
     CMD_PWM_IR_ENABLE,
     CMD_PWM_IR_DISABLE,
     CMD_PWM_IR_CLEAR,
     CMD_PWM_INIT_PARAM,
+    CMD_PWM_SET_DUTY_CYCLE,
+    CMD_PWM_SET_END_VALUE,
     CMD_PWM_CAP_GET,
     CMD_PWM_DEINIT_PARAM
 };
@@ -83,8 +85,13 @@ typedef struct
         } bits;
     } cfg;
 
-    UINT32 end_value;
-    UINT32 duty_cycle;
+#if (CFG_SOC_NAME == SOC_BK7231)
+    UINT16 end_value;
+    UINT16 duty_cycle;
+#else
+	UINT32 end_value;
+	UINT32 duty_cycle;
+#endif
     PFUNC p_Int_Handler;
 } pwm_param_t;
 

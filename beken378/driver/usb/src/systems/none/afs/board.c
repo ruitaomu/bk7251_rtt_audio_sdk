@@ -48,28 +48,36 @@ static uint8_t MGC_bBoardInitDone = FALSE;
 /*************************** FUNCTIONS ****************************/
 char MUSB_ReadConsole(void)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return 0;
 }
 
 void MUSB_WriteConsole(const char bChar)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 }
 
 void *MGC_AfsMemRealloc(void *pBlock, uint32_t iSize)
 {
     void *pNewBlock = MUSB_MemAlloc(iSize);
-    if(pNewBlock)
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pNewBlock)
     {
         MUSB_MemCopy(pNewBlock, pBlock, iSize);
         MUSB_MemFree(pBlock);
     }
-
+    else
+    {
+		MUSB_ERR_PRINTF("MGC_AfsMemRealloc: MUSB_MemAlloc failed\r\n");
+    }
     return (pNewBlock);
 }
 
 uint8_t MUSB_BoardMessageString(char *pMsg, uint16_t wBufSize, const char *pString)
 {
-    if((strlen(pMsg) + strlen(pString)) >= wBufSize)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if ((strlen(pMsg) + strlen(pString)) >= wBufSize)
     {
         return FALSE;
     }
@@ -85,7 +93,8 @@ uint8_t MUSB_BoardMessageNumber(char *pMsg, uint16_t wBufSize, uint32_t dwNumber
     char fmt[16];
     char number[32];
 
-    switch(bBase)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    switch (bBase)
     {
     case 8:
         type = 'i';
@@ -99,7 +108,7 @@ uint8_t MUSB_BoardMessageNumber(char *pMsg, uint16_t wBufSize, uint32_t dwNumber
     default:
         return FALSE;
     }
-    if(bJustification)
+    if (bJustification)
     {
         sprintf(format, "0%d%c", bJustification, type);
     }
@@ -117,6 +126,7 @@ uint8_t MUSB_BoardMessageNumber(char *pMsg, uint16_t wBufSize, uint32_t dwNumber
 
 uint32_t MUSB_BoardGetTime(void)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return fclk_get_tick();
 }
 
@@ -125,16 +135,19 @@ void MGC_AfsUdsIsr(void)
     uint8_t bIndex;
     MGC_AfsUds *pUds;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_NPRT("\r\n[MGC] AfsUdsIsr\r\n");
-    for(bIndex = 0; bIndex < MGC_bAfsUdsCount; bIndex++)
+    MUSB_DPRINTF("MGC_AfsUdsIsr: MGC_bAfsUdsCount = %x\r\n",MGC_bAfsUdsCount);
+    for (bIndex = 0; bIndex < MGC_bAfsUdsCount; bIndex++)
     {
         pUds = MGC_apAfsUds[bIndex];
-        if(pUds)
+        if (pUds)
         {
-            if (pUds->pfNoneIsr) /* pFuncIsr*/
+            if (pUds->pfNoneIsr)
             {
+                //			MGC_NoneControllerIsr()
                 pUds->pfNoneIsr(pUds->pNonePrivateData);
-                if(pUds->pPciAck)
+                if (pUds->pPciAck)
                 {
                     *((uint32_t *)pUds->pPciAck) = 3;
                 }
@@ -145,11 +158,15 @@ void MGC_AfsUdsIsr(void)
 
 static void MGC_BoardInit()
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_MemSet(MGC_apAfsUds, 0, sizeof(MGC_apAfsUds));
 
     MGC_bBoardInitDone = TRUE;
 }
 
+/*动态分配结构体MGC_AfsUds，并进行初始化
+初始化isr,静态结构体指针数组MGC_apAfsUds[]指向此结构体
+*/
 void *MUSB_BoardInitController(void *pPrivateData,
                                MUSB_NoneIsr pFuncIsr,
                                const MUSB_NoneController *pControllerInfo,
@@ -157,8 +174,10 @@ void *MUSB_BoardInitController(void *pPrivateData,
                                uint8_t **ppBaseBsr)
 {
     static MGC_AfsUds pUds;
+    MGC_bAfsUdsCount = 0;
 
-    if(!MGC_bBoardInitDone)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!MGC_bBoardInitDone)
     {
         MGC_BoardInit();
     }
@@ -176,7 +195,8 @@ void *MUSB_BoardInitController(void *pPrivateData,
 
     pUds.bIndex = MGC_bAfsUdsCount;
     MGC_apAfsUds[MGC_bAfsUdsCount++] = &pUds;
-
+    MUSB_DPRINTF("MUSB_BoardInitController: pUds.aIsrName = \"%s\", &pUds = 0x%p\r\n", pUds.aIsrName, &pUds);
+    MUSB_DPRINTF("MUSB_BoardInitController: MGC_bAfsUdsCount = %d, MGC_apAfsUds[] = 0x%p\r\n", MGC_bAfsUdsCount, MGC_apAfsUds[MGC_bAfsUdsCount-1]);
     return &pUds;
 }
 
@@ -185,37 +205,44 @@ uint8_t MUSB_BoardInitTimers(void *pPrivateData, uint16_t wTimerCount,
 {
     unsigned int iTimerCount;
     unsigned int iTimerIndex;
+    int iIndex;
     unsigned int iTimerAvail = 0;
     static MGC_AfsTimerWrapper Timerwrapper;
     MGC_AfsUds *pUds = (MGC_AfsUds *)pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     iTimerCount = 1;
-    if(iTimerCount < wTimerCount)
+    if (iTimerCount < wTimerCount)
     {
         return FALSE;
     }
     pUds->aTimerWrapper = &Timerwrapper;
 
     /* ensure enough free timers */
-    for(iTimerIndex = 0;
+    for (iTimerIndex = 0;
             (iTimerAvail < wTimerCount) && (iTimerIndex < iTimerCount);
             iTimerIndex++)
     {
         pUds->aTimerWrapper[iTimerAvail++].iIndex = iTimerIndex;
     }
 
-    if(iTimerAvail < wTimerCount)
+    if (iTimerAvail < wTimerCount)
     {
         /* insufficient good timers */
-        MUSB_MemFree(pUds->aTimerWrapper);
+//		MUSB_MemFree(pUds->aTimerWrapper);
         return FALSE;
     }
 
     /* allocate timers now */
-    for(iTimerIndex = 0; iTimerIndex < wTimerCount; iTimerIndex++)
+    for (iTimerIndex = 0; iTimerIndex < wTimerCount; iTimerIndex++)
     {
-        pUds->aTimerWrapper[iTimerIndex].pfExpired = NULL;
-        pUds->aTimerWrapper[iTimerIndex].bTimerStart = 0;
+		iIndex = 0;
+		if (iIndex >= 0)
+		{
+		    pUds->aTimerWrapper[iTimerIndex].iIndex = iIndex;
+		    pUds->aTimerWrapper[iTimerIndex].pfExpired = NULL;
+			pUds->aTimerWrapper[iTimerIndex].bTimerStart = 0;
+		}
     }
 
     pUds->wTimerCount = wTimerCount;
@@ -227,8 +254,15 @@ void MUSB_BoardDestroyController(void *pPrivateData)
 {
     MGC_AfsUds *pUds = (MGC_AfsUds *)pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_apAfsUds[pUds->bIndex] = NULL;
-    MUSB_MemFree(pPrivateData);
+//    MUSB_MemFree(pPrivateData);   // by gwf
+}
+
+void MUSB_BoardRunBackground(void* pPrivateData)
+{
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    /* nothing to do */
 }
 
 void MGC_AfsTimerExpired(void)
@@ -237,19 +271,34 @@ void MGC_AfsTimerExpired(void)
     MGC_AfsTimerWrapper *pWrapper;
 
     pUds = MGC_apAfsUds[0];
-    if(!pUds)
+    if (pUds == NULL)
     {
+        MUSB_DPRINTF("MGC_AfsTimerExpired: pUds = null\r\n");
         return;
     }
 
     pWrapper = &(pUds->aTimerWrapper[0]);
-    if(pWrapper->bTimerStart)
-    {
-        if((--pWrapper->dwTime) == 0)
+	if (pWrapper != NULL)
+	{
+        if (pWrapper->bTimerStart == 1)
         {
-            pWrapper->bTimerStart = 0;
-            pWrapper->pfExpired(pWrapper->pParam);
+            if ((--pWrapper->dwTime) == 0)
+            {
+                pWrapper->bTimerStart = 0; // stop count
+                if (pWrapper->pfExpired != NULL)
+                {
+                    pWrapper->pfExpired(pWrapper->pParam);
+                }
+            }
         }
+        else
+        {
+//            MUSB_DPRINTF("pWrapper->bTimerStart = %d\r\n", pWrapper->bTimerStart);
+        }
+	}
+    else
+    {
+        MUSB_DPRINTF("pWrapper == NULL\r\n");
     }
 }
 
@@ -263,20 +312,23 @@ uint8_t MUSB_BoardArmTimer(void *pPrivateData, uint16_t wIndex,
     MGC_AfsUds *pUds = (MGC_AfsUds *)pPrivateData;
     MGC_AfsTimerWrapper *pWrapper = &(pUds->aTimerWrapper[wIndex]);
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+	MUSB_DPRINTF("MUSB_BoardArmTimer: wIndex=%d, dwTime=%ld, bPeriodic=%d\r\n", wIndex, dwTime, bPeriodic);
+
     pWrapper->pParam = pParam;
     pWrapper->pfExpired = pfExpireCallback;
     pWrapper->dwTime = dwTime;
     pWrapper->bPeriodic = bPeriodic;
     pWrapper->bTimerStart = 1;
 
-    if(FALSE == bPeriodic)
+    if (FALSE == bPeriodic)
     {
-        if(bk_rtos_is_oneshot_timer_running(&(pWrapper->timer)))
+        if (bk_rtos_is_oneshot_timer_running(&(pWrapper->timer)))
         {
             MUSB_PRT("[MGC] Timer %d, stop it;\r\n", wIndex);
             bk_rtos_stop_oneshot_timer(&(pWrapper->timer));
         }
-        if(bk_rtos_is_oneshot_timer_init(&(pWrapper->timer)))
+        if (bk_rtos_is_oneshot_timer_init(&(pWrapper->timer)))
         {
             MUSB_PRT("[MGC] Timer %d, deinit it;\r\n", wIndex);
             bk_rtos_deinit_oneshot_timer(&(pWrapper->timer));
@@ -306,6 +358,8 @@ uint8_t MUSB_BoardCancelTimer(void *pPrivate, uint16_t wIndex)
 {
     MGC_AfsUds *pUds = (MGC_AfsUds *)pPrivate;
     MGC_AfsTimerWrapper *pWrapper = &(pUds->aTimerWrapper[wIndex]);
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     GLOBAL_INT_DECLARATION();
 
     GLOBAL_INT_DISABLE();
@@ -321,6 +375,7 @@ uint8_t MUSB_BoardCancelTimer(void *pPrivate, uint16_t wIndex)
 */
 uint8_t MUSB_BoardPrintDiag(void *pPrivate, const char *pMessage)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return TRUE;
 }
 
@@ -329,6 +384,7 @@ uint8_t MUSB_BoardPrintDiag(void *pPrivate, const char *pMessage)
 */
 void *MUSB_BoardSystemToBusAddress(void *pPrivate, const void *pSysAddr)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return NULL;
 }
 #endif

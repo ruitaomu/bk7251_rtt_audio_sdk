@@ -12,6 +12,7 @@
 #include "bk_rtos_pub.h"
 #include "sys_ctrl_pub.h"
 #include "saradc_intf.h"
+#include "mem_pub.h"
 
 #define ADC_TAG                      "saradc_intf"
 #define ADC_TASK_PRIORITY            (18)
@@ -298,6 +299,49 @@ create_exit:
     
     tadc_entity_deinit(&tadc_entity);
 }
+
+int saradc_get_adcdata(unsigned char channel, unsigned char mode,
+					  unsigned char pre_div, unsigned char samp_rate,
+					  unsigned short usCount,unsigned short *usData)
+{
+    UINT32 status;
+    saradc_desc_t *p_ADC_drv_desc = NULL;
+    DD_HANDLE saradc_handle;
+    
+    p_ADC_drv_desc = (saradc_desc_t *)os_malloc(sizeof(saradc_desc_t));
+    if (p_ADC_drv_desc == NULL)
+    {
+        os_printf("saradc_get malloc fail.\r\n");
+        return 0;
+    }
+
+    os_memset(p_ADC_drv_desc, 0x00, sizeof(saradc_desc_t));
+    p_ADC_drv_desc->channel = channel;
+    p_ADC_drv_desc->data_buff_size = usCount;
+    p_ADC_drv_desc->mode = ((mode & ADC_CONFIG_MODE_CONTINUE) << 0)
+                           | (ADC_CONFIG_MODE_4CLK_DELAY << 2);
+
+    p_ADC_drv_desc->has_data                = 0;
+    p_ADC_drv_desc->current_read_data_cnt   = 0;
+    p_ADC_drv_desc->current_sample_data_cnt = 0;
+    p_ADC_drv_desc->pre_div = pre_div;
+    p_ADC_drv_desc->samp_rate = samp_rate;
+    p_ADC_drv_desc->pData = usData;
+
+    saradc_handle = ddev_open(SARADC_DEV_NAME, &status, (UINT32)p_ADC_drv_desc);
+
+    while (1)
+    {
+        if (p_ADC_drv_desc->current_sample_data_cnt == p_ADC_drv_desc->data_buff_size)
+        {
+            ddev_close(saradc_handle);
+            break;
+        }
+    }
+
+    os_free(p_ADC_drv_desc);
+}
+
 
 #if CFG_SARADC_CALIBRATE
 static void adc_check(int argc, char **argv)

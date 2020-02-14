@@ -51,6 +51,8 @@ UINT32 func_init(void)
     intc_init();
 #endif
 
+    sctrl_set_wake_soure_status();
+
 #if CFG_SUPPORT_CALIBRATION
     FUNC_PRT("[FUNC]calibration_main\r\n");
     calibration_main();

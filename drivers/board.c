@@ -134,6 +134,7 @@ void rt_hw_cpu_reset(void)
         return ;
     }
 
+    set_reboot_item_value(1);
     rt_kprintf("reboot system \n");
     g_wdg_context.wdg_flag = WDG_STATUS_REBOOT;
     rt_device_control(device, RT_DEVICE_CTRL_WDT_SET_TIMEOUT, &time);

@@ -16,7 +16,7 @@
 // standard includes
 #include "co_int.h"
 
-#define ME_RC_PERIOD                 10   // 100
+#define ME_RC_PERIOD                 (100)   // 100
 #define ME_UTILS_RC_DEC_RATIO        (2)  // 5
 #define ME_UTILS_RC_INC_RATIO        (3)  // 10
 

@@ -31,7 +31,7 @@
  * in the array and the list entry is incomplete.
  */
 extern uint16_t MUSB_FillCommPeripheralList(uint8_t bDriverIndex, uint8_t *pList,
-        uint16_t wListRemain);
+										    uint16_t wListRemain);
 
 /**
  * Get a pointer to the communications class driver

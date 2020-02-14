@@ -29,35 +29,47 @@ const uint8_t *MGC_FindDescriptor(const uint8_t *pBuffer,
     uint16_t wOffset = 0;
     const MUSB_DescriptorHeader *pHeader = (MUSB_DescriptorHeader *)pBuffer;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FindDescriptor: pHeader->bDescriptorType = 0x%x, bDescriptorType = 0x%x, "
+                 "wBufferLength = 0x%x, bIndex = %d\r\n",
+                 pHeader->bDescriptorType, bDescriptorType, wBufferLength, bIndex);
     /* handle trivial case */
-    if((pHeader->bDescriptorType == bDescriptorType) && !bIndex)
+    if ((pHeader->bDescriptorType == bDescriptorType) && !bIndex)
     {
-        return (uint8_t *)pHeader;
+        MUSB_DPRINTF("MGC_FindDescriptor: 1 return 0x%p\r\n", pHeader);
+        return (uint8_t*)pHeader;
     }
 
     /* general case */
-    while((wOffset < wBufferLength) && (wFoundIndex < (int16_t)bIndex))
+    while ((wOffset < wBufferLength) && (wFoundIndex < (int16_t)bIndex))
     {
+        MUSB_DPRINTF("MGC_FindDescriptor: wOffset = 0x%x, wFoundIndex = %d\r\n", wOffset, wFoundIndex);
         pHeader = (MUSB_DescriptorHeader *)((uint8_t *)pBuffer + wOffset);
-        if(pHeader->bLength < 1)
+        MUSB_DPRINTF("MGC_FindDescriptor: pHeader = 0x%p, pHeader->bLength = 0x%x\r\n", pHeader, pHeader->bLength);
+        if (pHeader->bLength < 1)
         {
             /* we're in the weeds */
+            MUSB_DPRINTF("MGC_FindDescriptor: ERROR! we're in the weeds\r\n");
             return NULL;
         }
         wOffset += pHeader->bLength;
-        if(pHeader->bDescriptorType == bDescriptorType)
+        if (pHeader->bDescriptorType == bDescriptorType)
         {
             wFoundIndex++;
-            if(wFoundIndex == (uint16_t)bIndex)
+            if (wFoundIndex == (uint16_t)bIndex)
             {
+                MUSB_DPRINTF("MGC_FindDescriptor: wOffset = 0x%x, wFoundIndex = %d\r\n", wOffset, wFoundIndex);
+                MUSB_DPRINTF("MGC_FindDescriptor: 2 return 0x%p\r\n", pHeader);
                 return (uint8_t *)pHeader;
             }
         }
     }
-    if(wOffset < wBufferLength)
+    if (wOffset < wBufferLength)
     {
+        MUSB_DPRINTF("MGC_FindDescriptor: 3 return 0x%p\r\n", pHeader);
         return (uint8_t *)pHeader;
     }
+    MUSB_DPRINTF("MGC_FindDescriptor: return NULL\r\n");
     return NULL;
 }
 
@@ -73,8 +85,8 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
 #endif
     uint8_t *pBuffer;
     uint16_t wUnloadCount;
-#ifdef MUSB_ISO
-    uint16_t wFrameIndex;
+#ifdef MUSB_ISOCH
+    uint16_t wFrameIndex = 0;
     MUSB_IsochIrp *pIsochIrp = NULL;
 #endif
     uint8_t bAllowDma = FALSE;
@@ -82,8 +94,10 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
     MUSB_Irp *pIrp = NULL;
     uint8_t bComplete = FALSE;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_PipePacketReceived\r\n");
     wUnloadCount = wPacketSize;
-    switch(pEnd->bRxTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
+    switch (pEnd->bRxTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
     {
     case MUSB_ENDPOINT_XFER_BULK:
     case MUSB_ENDPOINT_XFER_INT:
@@ -91,17 +105,17 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
         bAllowDma = pIrp->bAllowDma;
         dwReqLength = pIrp->dwLength;
         pBuffer = pIrp->pBuffer + pEnd->dwRxOffset;
-        if(wPacketSize < pEnd->wRxPacketSize)
+        if (wPacketSize < pEnd->wRxPacketSize)
         {
             /* short packet means transfer complete */
             bComplete = TRUE;
         }
-        if((wPacketSize + pEnd->dwRxOffset) >= dwReqLength)
+        if ((wPacketSize + pEnd->dwRxOffset) >= dwReqLength)
         {
             /* received as much data as requested means transfer complete */
             bComplete = TRUE;
             /* but, the other side may send a 0-byte packet */
-            if(pIrp->bAllowShortTransfer && (0 == (wPacketSize % pEnd->wRxPacketSize)))
+            if (pIrp->bAllowShortTransfer && (0 == (wPacketSize % pEnd->wRxPacketSize)))
             {
                 bComplete = FALSE;
             }
@@ -110,23 +124,24 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
         dwReqLength -= pEnd->dwRxOffset;
         break;
 
-#ifdef MUSB_ISO
-    case MUSB_ENDPOINT_XFER_ISOC:
+#ifdef MUSB_ISOCH
+	    case MUSB_ENDPOINT_XFER_ISOCH:
         pIsochIrp = (MUSB_IsochIrp *)pCurrentIrp;
         bAllowDma = pIsochIrp->bAllowDma;
         wFrameIndex = pIsochIrp->wCurrentFrame;
         pIsochIrp->adwActualLength[wFrameIndex] = wPacketSize;
         pIsochIrp->adwStatus[wFrameIndex] = 0;
-        if( 0 != wPacketSize )
+        if ( 0 != wPacketSize )
         {
             pIsochIrp->wCurrentFrame++;
         }
         dwReqLength = pIsochIrp->adwLength[wFrameIndex + 1];
+        MUSB_DPRINTF("dwRxOffset=%d\r\n", pEnd->dwRxOffset);
         pBuffer = pIsochIrp->pBuffer + pEnd->dwRxOffset;
         /* complete when frame count is reached */
         bComplete = (pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount) ? TRUE : FALSE;
         /* pretend to be complete on callback interval (CompleteIrp won't retire it in this case) */
-        if(pIsochIrp->wCallbackInterval && (0 == (pIsochIrp->wCurrentFrame % pIsochIrp->wCallbackInterval)))
+        if (pIsochIrp->wCallbackInterval && (0 == (pIsochIrp->wCurrentFrame % pIsochIrp->wCallbackInterval)))
         {
             bComplete = TRUE;
         }
@@ -143,15 +158,16 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
     pPort->pfUnloadFifo(pPort, pEnd->bLocalEnd, wUnloadCount, pBuffer);
     pEnd->dwRxOffset += wUnloadCount;
 
-    switch(pEnd->bRxTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
+    switch (pEnd->bRxTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
     {
-#ifdef MUSB_ISO
-    case MUSB_ENDPOINT_XFER_ISOC:
-        if( wUnloadCount > ISOC_PACK_HEAD_LEN )
+#ifdef MUSB_ISOCH
+    case MUSB_ENDPOINT_XFER_ISOCH:
+//    	if ( wUnloadCount > ISOCH_PACK_HEAD_LEN )
+    	if (pIsochIrp->wFrameCount != 1)
         {
-            pIsochIrp->adwActualLength[wFrameIndex] -= ISOC_PACK_HEAD_LEN;
-            pEnd->dwRxOffset -= ISOC_PACK_HEAD_LEN;
-            memcpy( &pBuffer[0], &pBuffer[ISOC_PACK_HEAD_LEN], (wUnloadCount - ISOC_PACK_HEAD_LEN) );
+    		pIsochIrp->adwActualLength[wFrameIndex] -= ISOCH_PACK_HEAD_LEN;
+    		pEnd->dwRxOffset -= ISOCH_PACK_HEAD_LEN;
+    		memcpy( &pBuffer[0], &pBuffer[ISOCH_PACK_HEAD_LEN], (wUnloadCount - ISOCH_PACK_HEAD_LEN) );
         }
         break;
 #endif
@@ -161,14 +177,14 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
 
     pBuffer += wUnloadCount;
 
-    if(!bComplete && bContinue)
+    if (!bComplete && bContinue)
     {
         pPort->pfProgramStartReceive(pPort, pEnd, pBuffer, dwReqLength, pCurrentIrp, bAllowDma);
     }
 
 #ifdef MUSB_STATS
     pEndpointStats = MUSB_ArrayFetch(&(pPort->EndpointStats), pEnd->bLocalEnd);
-    if(pEndpointStats)
+    if (pEndpointStats)
     {
         pEndpointStats->dwRxByteCount += wUnloadCount;
     }
@@ -182,7 +198,7 @@ uint8_t MGC_PipePacketReceived(MGC_Port *pPort, uint32_t status,
  */
 uint8_t MGC_PipeTransmitReady(MGC_Port *pPort, MGC_EndpointResource *pEnd)
 {
-#ifdef MUSB_ISO
+#ifdef MUSB_ISOCH
     uint16_t wFrameIndex;
     MUSB_IsochIrp *pIsochIrp;
 #endif
@@ -195,19 +211,21 @@ uint8_t MGC_PipeTransmitReady(MGC_Port *pPort, MGC_EndpointResource *pEnd)
     uint8_t *pBuffer = NULL;
     uint8_t bComplete = FALSE;
 
-    if(pEnd->pTxIrp)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_PipeTransmitReady\r\n");
+    if (pEnd->pTxIrp)
     {
-        switch(pEnd->bTrafficType)
+		switch (pEnd->bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
         {
         case MUSB_ENDPOINT_XFER_BULK:
         case MUSB_ENDPOINT_XFER_INT:
             pIrp = (MUSB_Irp *)pEnd->pTxIrp;
             pGenIrp = pIrp;
             dwReqLength = pIrp->dwLength;
-            if(pEnd->dwTxOffset >= dwReqLength)
+            if (pEnd->dwTxOffset >= dwReqLength)
             {
                 /* send 0-byte packet if desired & needed */
-                if(pIrp->bAllowShortTransfer && (0 == (pEnd->dwTxSize % pEnd->wPacketSize)))
+                if (pIrp->bAllowShortTransfer && (0 == (pEnd->dwTxSize % pEnd->wPacketSize)))
                 {
                     pPort->pfProgramStartTransmit(pPort, pEnd, pBuffer, 0, pIrp);
                     return FALSE;
@@ -219,8 +237,8 @@ uint8_t MGC_PipeTransmitReady(MGC_Port *pPort, MGC_EndpointResource *pEnd)
             dwReqLength -= pEnd->dwTxOffset;
             pBuffer = pIrp->pBuffer + pEnd->dwTxOffset;
             break;
-#ifdef MUSB_ISO
-        case MUSB_ENDPOINT_XFER_ISOC:
+#ifdef MUSB_ISOCH
+		case MUSB_ENDPOINT_XFER_ISOCH:
             pIsochIrp = (MUSB_IsochIrp *)pEnd->pTxIrp;
             pGenIrp = pIsochIrp;
             wFrameIndex = pIsochIrp->wCurrentFrame;
@@ -232,7 +250,7 @@ uint8_t MGC_PipeTransmitReady(MGC_Port *pPort, MGC_EndpointResource *pEnd)
             /* complete when frame count is reached */
             bComplete = (pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount) ? TRUE : FALSE;
             /* pretend to be complete on callback interval (CompleteIrp won't retire it in this case) */
-            if(pIsochIrp->wCallbackInterval && (0 == (pIsochIrp->wCurrentFrame % pIsochIrp->wCallbackInterval)))
+            if (pIsochIrp->wCallbackInterval && (0 == (pIsochIrp->wCurrentFrame % pIsochIrp->wCallbackInterval)))
             {
                 bComplete = TRUE;
             }
@@ -250,13 +268,13 @@ uint8_t MGC_PipeTransmitReady(MGC_Port *pPort, MGC_EndpointResource *pEnd)
         bComplete = TRUE;
     }
 
-    if(!bComplete)
+    if (!bComplete)
     {
         pPort->pfProgramStartTransmit(pPort, pEnd, pBuffer, dwReqLength, pGenIrp);
 
 #ifdef MUSB_STATS
         pEndpointStats = MUSB_ArrayFetch(&(pPort->EndpointStats), pEnd->bLocalEnd);
-        if(pEndpointStats)
+        if (pEndpointStats)
         {
             pEndpointStats->dwTxByteCount += wLoadCount;
         }
@@ -276,15 +294,17 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
     MUSB_ControlIrp *pControlIrp;
     MUSB_Irp *pIrp;
     MGC_Pipe *pPipe;
-#ifdef MUSB_ISO
+#ifdef MUSB_ISOCH
     MUSB_IsochIrp *pIsochIrp;
 #endif
 
-    if(!pCurrentIrp)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_CompleteIrp\r\n");
+    if (!pCurrentIrp)
     {
         return FALSE;
     }
-    if(bIsTx)
+    if (bIsTx)
     {
         bTrafficType = pEnd->bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK;
         pItem->bCause = MGC_BSR_CAUSE_IRP_COMPLETE;
@@ -296,7 +316,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
     }
 
     /* if control/bulk or isoch limit, endpoint is done with this IRP */
-    switch(bTrafficType)
+    switch (bTrafficType)
     {
     case MUSB_ENDPOINT_XFER_INT:
         if (bIsTx)
@@ -304,12 +324,12 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
             pEnd->pTxIrp = NULL;
         }
         break;
-#ifdef MUSB_ISO
-    case MUSB_ENDPOINT_XFER_ISOC:
+#ifdef MUSB_ISOCH
+	case MUSB_ENDPOINT_XFER_ISOCH:
         pIsochIrp = (MUSB_IsochIrp *)pCurrentIrp;
-        if(pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount)
+        if (pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount)
         {
-            if(bIsTx)
+            if (bIsTx)
             {
                 pEnd->pTxIrp = NULL;
             }
@@ -321,7 +341,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
         break;
 #endif
     default:
-        if(bIsTx)
+        if (bIsTx)
         {
             pEnd->pTxIrp = NULL;
         }
@@ -329,6 +349,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
         {
             pEnd->pRxIrp = NULL;
         }
+		break;
     }
 
     /* fill info for queue */
@@ -337,7 +358,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
     pItem->pData = pCurrentIrp;
 
     /* update IRP status/actual */
-    switch(bTrafficType)
+    switch (bTrafficType)
     {
     case MUSB_ENDPOINT_XFER_CONTROL:
         pControlIrp = (MUSB_ControlIrp *)pCurrentIrp;
@@ -347,7 +368,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
     case MUSB_ENDPOINT_XFER_INT:
         pIrp = (MUSB_Irp *)pCurrentIrp;
         pIrp->dwStatus = bStatus;
-        if(bIsTx)
+        if (bIsTx)
         {
             pIrp->dwActualLength = pEnd->dwTxOffset;
             pEnd->dwTxOffset = 0L;
@@ -358,22 +379,22 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
             pIrp->dwActualLength = pEnd->dwRxOffset;
             pEnd->dwRxOffset = 0L;
         }
-        if(pIrp->bIsrCallback)
+        if (pIrp->bIsrCallback)
         {
-            MUSB_PRT("++bIsrcallback is valid!!!++\r\n");
+            MUSB_DPRINTF("++bIsrcallback is valid!!!++\r\n");
             pIrp->pfIrpComplete(pIrp->pCompleteParam, pIrp);
             /* start next IRP if not started already */
             pPipe = (MGC_Pipe *)pIrp->hPipe;
-            if(bIsTx)
+            if (bIsTx)
             {
-                if(!pEnd->pTxIrp && !pEnd->bStopTx)
+                if (!pEnd->pTxIrp && !pEnd->bStopTx)
                 {
                     MGC_StartNextIrp(pPipe->pPort, pEnd, TRUE);
                 }
             }
             else
             {
-                if(((MUSB_ENDPOINT_XFER_INT == bTrafficType) || !pEnd->pRxIrp)
+                if (((MUSB_ENDPOINT_XFER_INT == bTrafficType) || !pEnd->pRxIrp)
                         && !pEnd->bIsRxHalted)
                 {
                     MGC_StartNextIrp(pPipe->pPort, pEnd, FALSE);
@@ -382,12 +403,12 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
             return FALSE;
         }
         break;
-#ifdef MUSB_ISO
-    case MUSB_ENDPOINT_XFER_ISOC:
+#ifdef MUSB_ISOCH
+	case MUSB_ENDPOINT_XFER_ISOCH:
         pIsochIrp = (MUSB_IsochIrp *)pCurrentIrp;
-        if(bStatus || (pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount))
+        if (bStatus || (pIsochIrp->wCurrentFrame >= pIsochIrp->wFrameCount))
         {
-            if(bIsTx)
+            if (bIsTx)
             {
                 pEnd->dwTxOffset = 0L;
                 pEnd->dwTxSize = 0L;
@@ -397,22 +418,22 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
                 pEnd->dwRxOffset = 0L;
             }
         }
-        if(pIsochIrp->bIsrCallback)
+        if (pIsochIrp->bIsrCallback)
         {
             pIsochIrp->pfIrpComplete(pIsochIrp->pCompleteParam,
                                      pIsochIrp);
             /* start next IRP if not started already */
             pPipe = (MGC_Pipe *)pIsochIrp->hPipe;
-            if(bIsTx)
+            if (bIsTx)
             {
-                if(!pEnd->pTxIrp && !pEnd->bStopTx)
+                if (!pEnd->pTxIrp && !pEnd->bStopTx)
                 {
                     MGC_StartNextIrp(pPipe->pPort, pEnd, TRUE);
                 }
             }
             else
             {
-                if(!pEnd->pRxIrp && !pEnd->bIsRxHalted)
+                if (!pEnd->pRxIrp && !pEnd->bIsRxHalted)
                 {
                     MGC_StartNextIrp(pPipe->pPort, pEnd, FALSE);
                 }
@@ -422,7 +443,7 @@ uint8_t MGC_CompleteIrp(MGC_BsrItem *pItem, MGC_EndpointResource *pEnd,
         break;
 #endif
     default:
-        if(bIsTx)
+        if (bIsTx)
         {
             pEnd->dwTxOffset = 0L;
         }
@@ -454,14 +475,16 @@ uint8_t MGC_StartNextIrp(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     MGC_Pipe *pPipe = NULL;
     void *pNextIrp = bIsTx ? pEnd->pTxIrp : pEnd->pRxIrp;
 
-    if(!pNextIrp)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_StartNextIrp\r\n");
+    if (!pNextIrp)
     {
         pNextIrp = bIsTx ? MUSB_ListFindItem(&(pEnd->TxIrpList), 0) : MUSB_ListFindItem(&(pEnd->RxIrpList), 0);
     }
 
-    if(pNextIrp)
+    if (pNextIrp)
     {
-        if(bIsTx)
+        if (bIsTx)
         {
             MUSB_ListRemoveItem(&(pEnd->TxIrpList), pNextIrp);
         }
@@ -474,7 +497,7 @@ uint8_t MGC_StartNextIrp(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         pPipe = (MGC_Pipe *)pIrp->hPipe;
         bTrafficType = bIsTx ? pEnd->bTrafficType : pEnd->bRxTrafficType;
         /* now cast according to type */
-        switch(bTrafficType)
+	switch (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
         {
         case MUSB_ENDPOINT_XFER_BULK:
         case MUSB_ENDPOINT_XFER_INT:
@@ -482,7 +505,7 @@ uint8_t MGC_StartNextIrp(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             bAllowDma = pIrp->bAllowDma;
             pPipe = (MGC_Pipe *)pIrp->hPipe;
             break;
-        case MUSB_ENDPOINT_XFER_ISOC:
+	case MUSB_ENDPOINT_XFER_ISOCH:
             pIsochIrp = (MUSB_IsochIrp *)pNextIrp;
             bAllowDma = pIsochIrp->bAllowDma;
             pPipe = (MGC_Pipe *)pIsochIrp->hPipe;
@@ -490,31 +513,31 @@ uint8_t MGC_StartNextIrp(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         }
         bTypeOk = (pPipe->bTrafficType == bTrafficType);
         bSwitchBulk = (pPort->bIsHost && bTypeOk && (MUSB_ENDPOINT_XFER_BULK == pPipe->bTrafficType));
-        if(pPipe && (bTypeOk || bSwitchBulk))
+        if (pPipe && (bTypeOk || bSwitchBulk))
         {
             bOk = TRUE;
-            if(bSwitchBulk)
+            if (bSwitchBulk)
             {
                 /* TODO */
             }
 
             /* program it */
-            switch(bTrafficType)
+	    switch (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
             {
             case MUSB_ENDPOINT_XFER_BULK:
             case MUSB_ENDPOINT_XFER_INT:
                 dwReqLength = pIrp->dwLength - (bIsTx ? pEnd->dwTxOffset : pEnd->dwRxOffset);
                 pBuffer = pIrp->pBuffer;
                 break;
-            case MUSB_ENDPOINT_XFER_ISOC:
+	    case MUSB_ENDPOINT_XFER_ISOCH:
                 dwReqLength = pIsochIrp->adwLength[0];
                 pBuffer = pIsochIrp->pBuffer;
                 break;
             }
-            if(bIsTx)
+            if (bIsTx)
             {
                 /* start next Tx if not interrupt protocol */
-                if(MUSB_ENDPOINT_XFER_INT != bTrafficType)
+		if (MUSB_ENDPOINT_XFER_INT != (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK))
                 {
                     pEnd->pTxIrp = pNextIrp;
                     pPort->pfProgramStartTransmit(pPort, pEnd, pBuffer, dwReqLength, pNextIrp);
@@ -529,7 +552,7 @@ uint8_t MGC_StartNextIrp(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         else
         {
             /* TODO: log internal error */
-            if(bIsTx)
+            if (bIsTx)
             {
                 pEnd->pTxIrp = NULL;
             }
@@ -551,6 +574,7 @@ uint8_t MUSB_GetPipeHalt(MUSB_PipePtr hPipe)
 {
     MGC_Pipe *pPipe = (MGC_Pipe *)hPipe;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return pPipe->pLocalEnd->bIsHalted;
 }
 
@@ -565,6 +589,7 @@ uint32_t MUSB_SetPipeHalt(MUSB_PipePtr hPipe, uint8_t bHalt)
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
     uint8_t bIsIn = pPort->bIsHost ? !bIsTx : bIsTx;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPipe->pLocalEnd->bIsHalted = bHalt;
     return pPort->pfProgramHaltEndpoint(pPort, pPipe->pLocalEnd,
                                         bIsIn ? MUSB_DIR_IN : 0, bHalt);
@@ -581,6 +606,7 @@ uint32_t MUSB_FlushPipe(MUSB_PipePtr hPipe)
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
     uint8_t bIsIn = pPort->bIsHost ? !bIsTx : bIsTx;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return (pPort && pPort->pfProgramFlushEndpoint) ? pPort->pfProgramFlushEndpoint(pPort, pPipe->pLocalEnd,
             bIsIn ? MUSB_DIR_IN : 0, FALSE) : MUSB_STATUS_INVALID_ARGUMENT;
 }
@@ -600,16 +626,17 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
     uint8_t bTrafficType = bIsTx ? pEnd->bTrafficType : pEnd->bRxTrafficType;
 
-    if(pPort->bIsHost)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort->bIsHost)
     {
         /* lock end */
         pServices->pfLock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
     }
 
-    switch(bTrafficType)
+    switch (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
     {
     case MUSB_ENDPOINT_XFER_CONTROL:
-    case MUSB_ENDPOINT_XFER_ISOC:
+	case MUSB_ENDPOINT_XFER_ISOCH:
         status = MUSB_STATUS_INVALID_TYPE;
         break;
 
@@ -617,24 +644,24 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
     case MUSB_ENDPOINT_XFER_INT:
         /* since lists use dynamic memory, try only if necessary */
         pCurrentIrp = bIsTx ? pEnd->pTxIrp : pEnd->pRxIrp;
-        if(pCurrentIrp)
+		if ((pCurrentIrp) && (pCurrentIrp != pIrp))
         {
-            if(MUSB_ENDPOINT_XFER_INT == bTrafficType)
+		    if (MUSB_ENDPOINT_XFER_INT == (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK))
             {
                 status = MUSB_STATUS_ENDPOINT_BUSY;
             }
-            else if(bIsTx && !MUSB_ListAppendItem(&(pEnd->TxIrpList), pIrp, 0))
+            else if (bIsTx && !MUSB_ListAppendItem(&(pEnd->TxIrpList), pIrp, 0))
             {
                 status = MUSB_STATUS_NO_MEMORY;
             }
-            else if(!bIsTx && !MUSB_ListAppendItem(&(pEnd->RxIrpList), pIrp, 0))
+            else if (!bIsTx && !MUSB_ListAppendItem(&(pEnd->RxIrpList), pIrp, 0))
             {
                 status = MUSB_STATUS_NO_MEMORY;
             }
             /* if now there is no current IRP and we are at list head, the ISR didn't start us */
-            if(bIsTx)
+            if (bIsTx)
             {
-                if(!((volatile MGC_EndpointResource *)pEnd)->pTxIrp &&
+                if (!((volatile MGC_EndpointResource *)pEnd)->pTxIrp &&
                         (pIrp == MUSB_ListFindItem(&(pEnd->TxIrpList), 0)))
                 {
                     MGC_StartNextIrp(pPort, pEnd, TRUE);
@@ -642,7 +669,7 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
             }
             else
             {
-                if(!((volatile MGC_EndpointResource *)pEnd)->pRxIrp &&
+                if (!((volatile MGC_EndpointResource *)pEnd)->pRxIrp &&
                         (pIrp == MUSB_ListFindItem(&(pEnd->RxIrpList), 0)))
                 {
                     MGC_StartNextIrp(pPort, pEnd, FALSE);
@@ -652,10 +679,11 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
         else
         {
             /* nothing pending, so make it this */
-            if(bIsTx)
+            if (bIsTx)
             {
+                MUSB_DPRINTF("pfProgramStartTransmit(%d)\r\n", pEnd->bIsHalted);
                 /* only start a Tx if endpoint is not halted */
-                if(!pEnd->bIsHalted)
+                if (!pEnd->bIsHalted)
                 {
                     pPort->pfProgramStartTransmit(pPort, pEnd, pIrp->pBuffer,
                                                   pIrp->dwLength, pIrp);
@@ -667,6 +695,7 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
             }
             else
             {
+                MUSB_DPRINTF("pfProgramStartReceive\r\n");
                 pPort->pfProgramStartReceive(pPort, pEnd, pIrp->pBuffer,
                                              pIrp->dwLength, pIrp, pIrp->bAllowDma);
             }
@@ -675,7 +704,7 @@ uint32_t MUSB_StartTransfer(MUSB_Irp *pIrp)
         break;
     }
 
-    if(pPort->bIsHost)
+    if (pPort->bIsHost)
     {
         /* unlock end */
         pServices->pfUnlock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
@@ -693,6 +722,7 @@ uint32_t MUSB_InterruptReady(MUSB_Irp *pIrp)
     MGC_Port *pPort = (MGC_Port *)pPipe->hSession;
     MGC_EndpointResource *pEnd = pPipe->pLocalEnd;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->pfProgramStartTransmit(pPort, pEnd, pIrp->pBuffer, pIrp->dwLength, pIrp);
     return 0;
 }
@@ -711,7 +741,8 @@ uint32_t MUSB_CancelTransfer(MUSB_Irp *pIrp)
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
 
-    if(pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
     {
         bDirection = bIsTx ? MUSB_DIR_OUT : MUSB_DIR_IN;
     }
@@ -719,7 +750,7 @@ uint32_t MUSB_CancelTransfer(MUSB_Irp *pIrp)
     {
         bDirection = bIsTx ? MUSB_DIR_IN : MUSB_DIR_OUT;
     }
-    if((bIsTx && (pIrp == pEnd->pTxIrp)) || (!bIsTx && (pIrp == pEnd->pRxIrp)))
+    if ((bIsTx && (pIrp == pEnd->pTxIrp)) || (!bIsTx && (pIrp == pEnd->pRxIrp)))
     {
         if (pPort->pfProgramFlushEndpoint)
         {
@@ -737,13 +768,13 @@ uint32_t MUSB_CancelTransfer(MUSB_Irp *pIrp)
     }
     else
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
             /* lock end */
             pServices->pfLock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
         }
         /* remove */
-        if(bIsTx)
+        if (bIsTx)
         {
             MUSB_ListRemoveItem(&(pEnd->TxIrpList), pIrp);
         }
@@ -751,7 +782,7 @@ uint32_t MUSB_CancelTransfer(MUSB_Irp *pIrp)
         {
             MUSB_ListRemoveItem(&(pEnd->RxIrpList), pIrp);
         }
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
             /* unlock end */
             pServices->pfUnlock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
@@ -761,7 +792,7 @@ uint32_t MUSB_CancelTransfer(MUSB_Irp *pIrp)
     return dwStatus;
 }
 
-#ifdef MUSB_ISO
+#ifdef MUSB_ISOCH
 /*
  * Schedule an isochronous transfer
  * Returns: 0 on success; error code on failure
@@ -780,19 +811,20 @@ uint32_t MUSB_ScheduleIsochTransfer(
     uint8_t bTrafficType = pPipe->bTrafficType;
     void *pTestIrp = bIsTx ? pEnd->pTxIrp : pEnd->pRxIrp;
 
-    if(pPort->bIsHost)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort->bIsHost)
     {
         /* lock end */
         pServices->pfLock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
     }
 
-    if(pTestIrp)
+    if (pTestIrp)
     {
         status = MUSB_STATUS_ENDPOINT_BUSY;
     }
     else
     {
-        switch(bTrafficType)
+        switch (bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
         {
         case MUSB_ENDPOINT_XFER_CONTROL:
         case MUSB_ENDPOINT_XFER_BULK:
@@ -800,32 +832,33 @@ uint32_t MUSB_ScheduleIsochTransfer(
             status = MUSB_STATUS_INVALID_TYPE;
             break;
 
-        case MUSB_ENDPOINT_XFER_ISOC:
+        case MUSB_ENDPOINT_XFER_ISOCH:
             pBuffer = pIsochIrp->pBuffer;
             dwLength = pIsochIrp->adwLength[0];
             /* TODO: really this should just go in schedule */
-            if(bIsTx)
+            if (bIsTx)
             {
-                if(dwWaitCount)
+                if (dwWaitCount)
                 {
                     pEnd->dwWaitFrameCount = dwWaitCount;
                 }
                 else
                 {
+                    // MGC_FdrcStartTx
                     pPort->pfProgramStartTransmit(pPort, pEnd, pBuffer, dwLength, pIsochIrp);
                 }
             }
             else
             {
-                pPort->pfProgramStartReceive(pPort, pEnd, pBuffer, dwLength,
-                                             pIsochIrp, pIsochIrp->bAllowDma);
+                // MGC_FdrcStartRx
+                pPort->pfProgramStartReceive(pPort, pEnd, pBuffer, dwLength, 
+                    pIsochIrp, pIsochIrp->bAllowDma);
             }
             break;
-
         }
     }
 
-    if(pPort->bIsHost)
+    if (pPort->bIsHost)
     {
         /* unlock end */
         pServices->pfUnlock(pServices->pPrivateData, 1 + pEnd->bLocalEnd);
@@ -845,7 +878,8 @@ uint32_t MUSB_CancelIsochTransfer(MUSB_IsochIrp *pIsochIrp)
     MGC_Port *pPort = (MGC_Port *)pPipe->hSession;
     MGC_EndpointResource *pEnd = pPipe->pLocalEnd;
 
-    if(pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
     {
         bDirection = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ?
                      MUSB_DIR_OUT : MUSB_DIR_IN;

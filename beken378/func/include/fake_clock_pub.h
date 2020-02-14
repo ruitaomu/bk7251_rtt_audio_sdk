@@ -4,6 +4,10 @@
 #include "include.h"
 
 #define FCLK_PWM_ID           PWM0
+#if (CFG_SOC_NAME != SOC_BK7231)
+#define FCLK_TIMER_ID           BKTIMER3
+#define CAL_TIMER_ID           BKTIMER2
+#endif
 #if CFG_SUPPORT_RTT
 #define FCLK_DURATION_MS      (1000 / RT_TICK_PER_SECOND)
 
@@ -12,9 +16,13 @@
 #define FCLK_DURATION_MS      2
 
 #define FCLK_SECOND           (1000/FCLK_DURATION_MS)
+#define TICK_PER_SECOND       FCLK_SECOND
 #endif
 
-extern UINT32 fclk_get_tick(void);
+#define BK_MS_TO_TICKS(x)     ((x) / (FCLK_DURATION_MS))
+#define BK_TICKS_TO_MS(x)     ((x) * (FCLK_DURATION_MS))
+
+extern UINT64 fclk_get_tick(void);
 extern UINT32 fclk_get_second(void);
 extern void fclk_reset_count(void);
 extern void fclk_init(void);

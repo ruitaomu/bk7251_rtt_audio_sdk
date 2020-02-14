@@ -24,13 +24,13 @@ static int8_t MGC_CharCompare(char c1, char c2, uint8_t bCaseSensitive)
     char cc1 = c1;
     char cc2 = c2;
 
-    if(!bCaseSensitive)
+    if (!bCaseSensitive)
     {
-        if((c1 >= 'a') && (c1 <= 'z'))
+        if ((c1 >= 'a') && (c1 <= 'z'))
         {
             cc1 -= MGC_CapOffset;
         }
-        if((c2 >= 'a') && (c2 <= 'z'))
+        if ((c2 >= 'a') && (c2 <= 'z'))
         {
             cc2 -= MGC_CapOffset;
         }
@@ -49,27 +49,27 @@ int8_t MUSB_StringCompare(const char *pString1,
     const char *p2 = pString2;
 
     /* sanity */
-    if(!pString1 || !pString2)
+    if (!pString1 || !pString2)
     {
         return 1;
     }
 
     /* compare characters until mismatch or at least one string's end */
-    while((0 == bResult) && *p1 && *p2)
+    while ((0 == bResult) && *p1 && *p2)
     {
         bResult = MGC_CharCompare(*p1, *p2, bCaseSensitive);
         p1++;
         p2++;
     }
-    if(0 == bResult)
+    if (0 == bResult)
     {
         /* strings matched until one's end; indicate different-sized strings */
-        if(*p1 && !*p2)
+        if (*p1 && !*p2)
         {
             /* first string is longer */
             bResult = 1;
         }
-        else if(!*p1 && *p2)
+        else if (!*p1 && *p2)
         {
             /* second string is longer */
             bResult = -1;
@@ -90,23 +90,23 @@ uint8_t MUSB_StringConcat(char *pResult,
     uint8_t bResult = FALSE;
 
     /* sanity */
-    if(!pResult || !pConcat)
+    if (!pResult || !pConcat)
     {
         return bResult;
     }
 
-    while(pResult[wIndex] && (wIndex < wResultLength))
+    while (pResult[wIndex] && (wIndex < wResultLength))
     {
         wIndex++;
     }
-    if(wIndex < wResultLength)
+    if (wIndex < wResultLength)
     {
-        while(*pAppend && (wIndex < wResultLength))
+        while (*pAppend && (wIndex < wResultLength))
         {
             pResult[wIndex++] = *pAppend;
             pAppend++;
         }
-        if(wIndex < wResultLength)
+        if (wIndex < wResultLength)
         {
             pResult[wIndex] = (char)0;
             bResult = TRUE;
@@ -134,26 +134,26 @@ const char *MUSB_StringFind(const char *pString,
     uint16_t wFoundLength = 0;
 
     /* sanity */
-    if(!pString || !pPattern)
+    if (!pString || !pPattern)
     {
         return NULL;
     }
 
     /* find first candidate and prune if length impossible */
-    while((dwStringLength >= (int32_t)wPatternLength) &&
+    while ((dwStringLength >= (int32_t)wPatternLength) &&
             (wFoundLength < wPatternLength))
     {
         wFoundLength = 0;
-        while((dwStringLength >= (int32_t)wPatternLength) &&
+        while ((dwStringLength >= (int32_t)wPatternLength) &&
                 (0 != MGC_CharCompare(*pSearch, *pFind, bCaseSensitive)))
         {
             pSearch++;
             dwStringLength--;
         }
         pResult = pSearch;
-        if(dwStringLength >= (int32_t)wPatternLength)
+        if (dwStringLength >= (int32_t)wPatternLength)
         {
-            while((wFoundLength < wPatternLength) &&
+            while ((wFoundLength < wPatternLength) &&
                     (0 == MGC_CharCompare(pSearch[wFoundLength], pPattern[wFoundLength], bCaseSensitive)))
             {
                 wFoundLength++;
@@ -178,11 +178,11 @@ uint8_t MUSB_Stringize(char *pResult, uint16_t wResultLength,
     uint8_t bOk = TRUE;
     uint32_t dwValue = dwNumber;
 
-    if(!pResult || !wResultLength || (wResultLength <= bJustification))
+    if (!pResult || !wResultLength || (wResultLength <= bJustification))
     {
         bOk = FALSE;
     }
-    switch(bBase)
+    switch (bBase)
     {
     case 2:
     case 8:
@@ -192,12 +192,12 @@ uint8_t MUSB_Stringize(char *pResult, uint16_t wResultLength,
     default:
         bOk = FALSE;
     }
-    if(bOk)
+    if (bOk)
     {
-        if(!dwNumber)
+        if (!dwNumber)
         {
             /* trivial case */
-            for(wIndex = 0; wIndex < MUSB_MAX(bJustification, 1); wIndex++)
+            for (wIndex = 0; wIndex < MUSB_MAX(bJustification, 1); wIndex++)
             {
                 pResult[wIndex] = '0';
             }
@@ -207,24 +207,24 @@ uint8_t MUSB_Stringize(char *pResult, uint16_t wResultLength,
         {
             /* count digits */
             wCount = 0;
-            while(dwValue)
+            while (dwValue)
             {
                 dwValue /= bBase;
                 wCount++;
             }
 
             /* justify now if needed */
-            if(bJustification && (bJustification >= wCount))
+            if (bJustification && (bJustification >= wCount))
             {
                 wZeroCount = bJustification - wCount;
-                for(wIndex = 0; wIndex < wZeroCount; wIndex++)
+                for (wIndex = 0; wIndex < wZeroCount; wIndex++)
                 {
                     pResult[wIndex] = '0';
                 }
             }
 
             /* fail if overflow would result */
-            if((wCount + wZeroCount) >= wResultLength)
+            if ((wCount + wZeroCount) >= wResultLength)
             {
                 bOk = FALSE;
             }
@@ -234,10 +234,10 @@ uint8_t MUSB_Stringize(char *pResult, uint16_t wResultLength,
                 wIndex = wCount + wZeroCount;
                 pResult[wIndex] = (char)0;
                 dwValue = dwNumber;
-                while(dwValue)
+                while (dwValue)
                 {
                     bDigit = (uint8_t)(dwValue % bBase);
-                    if(bDigit > 9)
+                    if (bDigit > 9)
                     {
                         pResult[--wIndex] = 'A' + bDigit - 10;
                     }
@@ -262,9 +262,9 @@ uint16_t MUSB_StringLength(const char *pString)
     uint16_t wResult = 0;
     const char *p = pString;
 
-    if(p)
+    if (p)
     {
-        while(*p && (wResult < 0xffff))
+        while (*p && (wResult < 0xffff))
         {
             p++;
             wResult++;
@@ -278,23 +278,23 @@ static uint8_t MGC_GetDigitValue(const char bDigit, uint8_t *pbResult, uint8_t b
     uint8_t bResult = TRUE;
     uint8_t bValue = bDigit - '0';
 
-    if(bDigit < '0')
+    if (bDigit < '0')
     {
         bResult = FALSE;
     }
-    if(16 == bBase)
+    if (16 == bBase)
     {
-        if(bDigit >= 'a')
+        if (bDigit >= 'a')
         {
             bValue = bDigit - 'a' + 10;
         }
-        else if(bDigit >= 'A')
+        else if (bDigit >= 'A')
         {
             bValue = bDigit - 'A' + 10;
         }
     }
 
-    if(bValue >= bBase)
+    if (bValue >= bBase)
     {
         bResult = FALSE;
     }
@@ -317,35 +317,35 @@ int32_t MUSB_StringParse(const char *pString, const char **pEnd, uint8_t bBase)
     uint8_t bRealBase = bBase;
 
     /* sanity */
-    if(!pString)
+    if (!pString)
     {
         return 0;
     }
 
-    if(pEnd)
+    if (pEnd)
     {
         *pEnd = pString;
     }
-    if('-' == *pDigit)
+    if ('-' == *pDigit)
     {
         bIsNegative = TRUE;
         pDigit++;
     }
 
-    if(!bRealBase)
+    if (!bRealBase)
     {
         pTest = MUSB_StringFind(pDigit, "0x", FALSE);
-        if(pTest == pDigit)
+        if (pTest == pDigit)
         {
             bRealBase = 16;
             pDigit += 2;
         }
-        else if('0' == *pDigit)
+        else if ('0' == *pDigit)
         {
             bRealBase = 8;
             pDigit++;
         }
-        else if('%' == *pDigit)
+        else if ('%' == *pDigit)
         {
             bRealBase = 2;
             pDigit++;
@@ -357,13 +357,13 @@ int32_t MUSB_StringParse(const char *pString, const char **pEnd, uint8_t bBase)
     }
 
     bOk = MGC_GetDigitValue(*pDigit, &bDigit, bRealBase);
-    while(bOk)
+    while (bOk)
     {
         dwResult *= bRealBase;
         dwResult += bDigit;
         bOk = MGC_GetDigitValue(*++pDigit, &bDigit, bRealBase);
     }
-    if(pEnd)
+    if (pEnd)
     {
         *pEnd = pDigit;
     }

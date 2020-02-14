@@ -128,12 +128,13 @@ MUSB_DeviceDriver *MUSB_GetStorageClassDriver(void)
  */
 static MGC_MsdDevice *MGC_MsdDeviceInit(MUSB_Device *pUsbDevice)
 {
-    MGC_MsdDevice            *pMsdDevice;
+    MGC_MsdDevice            *pMsdDevice = NULL;
 
     MUSB_PRT("[MGC] MsdDeviceInit is called\r\n");
     pMsdDevice = (MGC_MsdDevice *)MUSB_MemAlloc (sizeof(MGC_MsdDevice) );
     if (NULL == pMsdDevice)
     {
+        MUSB_ERR_PRINTF("MGC_MsdDeviceInit: MUSB_MemAlloc failed\r\n");
         MUSB_DIAG_STRING(MUSB_MSD_DIAG_ERROR, "MSD Error: Insufficient memory");
         return (NULL);
     }
@@ -143,6 +144,7 @@ static MGC_MsdDevice *MGC_MsdDeviceInit(MUSB_Device *pUsbDevice)
 
     MUSB_DIAG_STRING(MUSB_MSD_DIAG_SUCCESS, "MSD: Initialization Completed");
 
+    MUSB_DPRINTF("MGC_MsdDeviceInit end\r\n");
     return pMsdDevice;
 }
 
@@ -166,6 +168,7 @@ MUSB_MsdConnect(  void              *pPrivateData,
     const MUSB_ConfigurationDescriptor *pConfig = pUsbDevice->apConfigDescriptors[0];
     uint8_t bStatus = FALSE;
 
+    MUSB_DPRINTF1("MUSB_MsdConnect start\r\n");
     /* Device is connected */
     MUSB_DIAG_STRING(MUSB_MSD_DIAG_SUCCESS, "Mass Storage Device Connected");
 
@@ -225,6 +228,7 @@ MUSB_MsdConnect(  void              *pPrivateData,
     if(pProtocol)
     {
         pMsdDevice = MGC_MsdDeviceInit(pUsbDevice);
+        MUSB_DPRINTF("MUSB_MsdConnect: pMsdDevice = 0x%p\r\n", pMsdDevice);
         if(pMsdDevice)
         {
             pMsdDevice->pProtocol = pProtocol;
@@ -248,6 +252,7 @@ MUSB_MsdConnect(  void              *pPrivateData,
                          "MSD Error: No interface has supported subclass/protocol");
     }
 
+    MUSB_DPRINTF("MUSB_MsdConnect end\r\n");
     return (bStatus);
 }/* End MUSB_MsdConnect() */
 
@@ -258,9 +263,9 @@ void MUSB_MsdDisconnect (void           *pPrivateData,
 {
     MGC_MsdDevice            *pMsdDevice;
 
+    MUSB_DPRINTF1("MUSB_MsdDisconnect\r\n");
 
     pMsdDevice = (MGC_MsdDevice *)pUsbDevice->pDriverPrivateData;
-
 
     /* Check against the USB device and bus handle */
     if( (hBus != pMsdDevice->hBus) || (pUsbDevice != pMsdDevice->pUsbDevice) )
@@ -290,6 +295,7 @@ static uint32_t MGC_MsdConfigureDevice(MGC_MsdDevice *pMsdDevice)
     pControlIrp     = &(pMsdDevice->ControlIrp);
     /*此处为设置setup configuration包*/
 
+    MUSB_DPRINTF1("MGC_MsdConfigureDevice\r\n");
     /** Prepare the Setup Packet for sending Set Config Request */
     MGC_MSD_PREPARE_SETUP_PACKET(pSetup,
                                  (MUSB_DIR_OUT | MUSB_TYPE_STANDARD | MUSB_RECIP_DEVICE),
@@ -321,7 +327,7 @@ static uint32_t MGC_MsdSetConfigCallback(void *pContext, MUSB_ControlIrp *pContr
 {
     MGC_MsdDevice            *pMsdDevice;
 
-    MUSB_PRT("[MGC] MsSetConfigCallback fun is called\r\n");
+	MUSB_DPRINTF1("MGC_MsSetConfigCallback\r\n");
 
     pMsdDevice = (MGC_MsdDevice *) pContext;
 
@@ -338,7 +344,7 @@ static uint32_t MGC_MsdSetConfigCallback(void *pContext, MUSB_ControlIrp *pContr
     /* Device is connected */
     MUSB_DIAG_STRING(MUSB_MSD_DIAG_SUCCESS, "Mass Storage Device Configured Successfully");
 
-    //就是函数 MGC_BotProtocolStartDevice() 启动Get_Max_Lun
+    // 就是函数 MGC_BotProtocolStartDevice() 启动Get_Max_Lun
     if(!pMsdDevice->pProtocol->pfStartDevice(
                 pMsdDevice->pProtocol->pProtocolData, pMsdDevice->pUsbDevice))
     {
@@ -348,4 +354,4 @@ static uint32_t MGC_MsdSetConfigCallback(void *pContext, MUSB_ControlIrp *pContr
     return 0;
 }
 #endif // CFG_SUPPORT_MSD
-// eof
+

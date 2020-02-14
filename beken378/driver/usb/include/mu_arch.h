@@ -93,8 +93,27 @@
 /* allow overrides of the above */
 #include "plat_arc.h"
 
+#ifdef BIG_ENDIAN
 /**
  * Swap the given 16-bit quantity from USB byte order (little-endian)
+ * to host byte order.
+ * @param _data the 16-bit quantity
+ * @return quantity in host byte order
+ */
+#define MUSB_SWAP16(_data) (((_data) << 8) | ((_data) >> 8))
+
+/**
+ * Swap the given 32-bit quantity from USB byte order (little-endian) 
+ * to host byte order.
+ * @param _data the 32-bit quantity
+ * @return quantity in host byte order
+ */
+#define MUSB_SWAP32(_data) ( ((_data) << 24) | ((_data) << 16) | ((_data) >> 24) | ((_data) >> 16) )
+
+#else
+
+/**
+ * Swap the given 16-bit quantity from USB byte order (little-endian) 
  * to host byte order.
  * @param _data the 16-bit quantity
  * @return quantity in host byte order
@@ -108,6 +127,8 @@
  * @return quantity in host byte order
  */
 #define MUSB_SWAP32(_data) _data
+
+#endif	/* BIG_ENDIAN or not */
 
 /**
  * Swap the pointed-to 16-bit quantity from USB byte order (little-endian)

@@ -1,15 +1,11 @@
 /*
- * File      : player.h
+ * File: player.h
+ * 
  * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
- *
- * Change Logs:
- * Date           Author       Notes
- * 2018-11-05     liu2guang    Perfect the description and format.
- * 2018-12-18     liu2guang    Add user data stream playback interface. 
  */
 
-#ifndef PLAYER_H__
-#define PLAYER_H__
+#ifndef __PLAYER_H__
+#define __PLAYER_H__
 
 #include "player_config.h" 
 #include "player_system.h" 
@@ -41,15 +37,16 @@ enum PLAYER_RESULT
 /* player event */ 
 enum PLAYER_EVENT
 {
-    PLAYER_AUDIO_PLAYBACK = 0,
-    PLAYER_AUDIO_CLOSED,
+    PLAYER_AUDIO_PLAYBACK = 0, // start play event
+    PLAYER_AUDIO_CLOSED,       // play over event
+    PLAYER_PLAYBACK_FAILED,    // play failed event
+    PLAYER_PLAYBACK_BREAK,     // usic playback was interrupted abnormally event
+    PLAYER_PLAYBACK_STOP,      // user actively stops playing event
+    PLAYER_APP_SUSPENDED,      // suspended play event
+    PLAYER_APP_RESUMED,        // resumed play event
+    PLAYER_VOLUME_CHANGED,     // volum changed event
 
-    PLYAER_STATE_CHANGED,
-    PLAYER_VOLUME_CHANGED,
-
-    PLAYER_APP_SUSPENDED,
-    PLAYER_APP_RESUMED,
-    PLAYER_AUDIO_PLAYEND
+    PLYAER_STATE_CHANGED,      // an incident of abandonment!!!
 };
 
 struct rt_work;
@@ -75,7 +72,7 @@ int player_init(void);
  * 3. Switch play when the play is paused but the uri has changed
  */
 int player_play(void);
-int player_play_position(int position);
+int player_play_position(int position); // unit sec
 
 #if CONFIG_SESSION_STREAM
 int player_play_websession(struct webclient_session* session);
@@ -102,7 +99,7 @@ int player_stop(void);
 int player_pause(void);
 
 /**
- * Seek music 
+ * Seek music during playback
  *
  * @return PLAYER_FAILED: seek failed
  *         PLAYER_OK    : seek successful
@@ -181,9 +178,64 @@ int player_set_content_length(int len);
  *
  * @return PLAYER_FAILED: set failed
  *         PLAYER_OK    : set successful
+ * 
+ * @note: v1.3.0 will remove the player_set_play_complete(), please use player_set_event_callback()!
+ * @warning: that using this function does not provide technical support!
  */
 int player_set_play_complete(void (*play_complete_cb)(void)); 
-int player_set_event_handler(void (*handler)(int event, void *parameter), void *parameter); 
+
+/**
+ * Set the play layer event callback: 
+ * 1. PLAYER_AUDIO_PLAYBACK : start play
+ * 2. PLAYER_AUDIO_CLOSED   : play over
+ * 3. PLAYER_APP_SUSPENDED  : suspended play
+ * 4. PLAYER_APP_RESUMED    : resumed play
+ * 5. PLAYER_VOLUME_CHANGED : volum changed
+ * 6. PLAYER_PLAYBACK_FAILED: play failed
+ * 7. PLAYER_PLAYBACK_BREAK : music playback was interrupted abnormally
+ * 8. PLAYER_PLAYBACK_STOP  : user actively stops playing
+ * 
+ * @param callback callback function
+ * @param user_data callback function user_data
+ *
+ * @return PLAYER_FAILED: set failed
+ *         PLAYER_OK    : set successful
+ * 
+ * @note: v1.3.0 will remove the player_set_play_complete(), please use this, TODO!
+ * @note: Player related apis cannot be used!
+ * @note: Synchronous callback mechanism, please ensure that the time is short and determined!
+ */
+int player_set_event_callback(void (*callback)(int event, void *user_data), void *user_data); 
+
+/**
+ * Set the player volume(0 ~ 99)
+ * 
+ * @param volume player volume
+ *
+ * @return PLAYER_OK: set successful
+ */
+int player_set_volume(int volume); 
+
+/**
+ * Get the player volume(0 ~ 99)
+ * 
+ * @return volume: player volume(0 ~ 99)
+ */
+int player_get_volume(void); 
+
+/**
+ * Gets the duration of the song being played, unit seconds
+ * 
+ * @return duration: n seconds
+ */
+int player_get_duration(void);
+
+/**
+ * Gets the position of the song being played, unit millisecond
+ * 
+ * @return position: n millisecond
+ */
+int player_get_position(void);
 
 /**
  * Print player version num
@@ -192,13 +244,11 @@ int player_set_event_handler(void (*handler)(int event, void *parameter), void *
  */
 char* player_get_version(void); 
 
-/* Internal use of player */
-int player_event_handle(int timeout);
-int player_fetch_seek(void);
-int player_set_duration(int duration);
-int player_get_duration(void);
-int player_set_position(int position);
-int player_get_position(void);
-void player_do_work(struct rt_work* work);
+/* *************************** Warning: It is prohibited to use *************************** */
+extern int player_event_handle(int timeout_value);
+extern int player_set_duration(int duration); 
+extern int player_set_position(int position); 
+extern int player_fetch_seek(void); 
+/* *************************** Warning: It is prohibited to use *************************** */
 
 #endif

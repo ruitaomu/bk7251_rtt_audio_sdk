@@ -47,10 +47,11 @@ int MGC_FcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
     MUSB_SystemServices *pServices = pController->pSystemServices;
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("MGC_FcIsr\r\n");
 #ifdef MUSB_DMA
-    if(pPort->pDmaController && pPort->pDmaController->pfDmaControllerIsr)
+    if (pPort->pDmaController && pPort->pDmaController->pfDmaControllerIsr)
     {
-        if(pPort->pDmaController->pfDmaControllerIsr(
+        if (pPort->pDmaController->pfDmaControllerIsr(
                     pPort->pDmaController->pPrivateData))
         {
             iResult = 0;
@@ -58,7 +59,7 @@ int MGC_FcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
     }
 #endif	/* DMA enabled */
 
-    if(bIntrUsbValue)
+    if (bIntrUsbValue)
     {
         MGC_DIAG1(3, pController, "IntrUSB=", bIntrUsbValue, 16, 2);
         iResult = MGC_FcUsbIsr(pPort, bIntrUsbValue);
@@ -68,15 +69,16 @@ int MGC_FcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
 
     /* scan for Tx endpoints requiring servicing */
     dwRegVal = wIntrTxValue;
-    if(dwRegVal && (iResult < 0))
+    if (dwRegVal && (iResult < 0))
     {
         iResult = 0;
     }
     /* the low bit is a special case: Tx or Rx on endpoint 0 */
-    if(dwRegVal & 1)
+    if (dwRegVal & 1)
     {
+        // MGC_HsfcServiceDefaultEnd()
         bQueue = pPort->pfServiceDefaultEnd(pPort, &qItem);
-        if(bQueue)
+        if (bQueue)
         {
             iResult++;
 #ifdef MUSB_OVERHEAD
@@ -89,12 +91,12 @@ int MGC_FcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
     /* scan for Tx endpoints 1-15 requiring servicing */
     iShift = 1;
     dwRegVal >>= 1;
-    while(dwRegVal)
+    while (dwRegVal)
     {
-        if(dwRegVal & 1)
+        if (dwRegVal & 1)
         {
             bQueue = pPort->pfServiceTransmitAvail(pPort, iShift, &qItem);
-            if(bQueue)
+            if (bQueue)
             {
                 iResult++;
 #ifdef MUSB_OVERHEAD
@@ -110,18 +112,18 @@ int MGC_FcIsr(MGC_Controller *pController, uint8_t bIntrUsbValue,
 
     /* scan for Rx endpoints 1-15 requiring servicing */
     dwRegVal = wIntrRxValue;
-    if(dwRegVal && (iResult < 0))
+    if (dwRegVal && (iResult < 0))
     {
         iResult = 0;
     }
     iShift = 1;
     dwRegVal >>= 1;
-    while(dwRegVal)
+    while (dwRegVal)
     {
-        if(dwRegVal & 1)
+        if (dwRegVal & 1)
         {
             bQueue = pPort->pfServiceReceiveReady(pPort, iShift, &qItem);
-            if(bQueue)
+            if (bQueue)
             {
                 iResult++;
 #ifdef MUSB_OVERHEAD
@@ -148,10 +150,10 @@ uint8_t MGC_FcDmaChannelStatusChanged(
     MUSB_SystemServices *pServices = pController->pSystemServices;
 
     /* TODO: something more specific might be better */
-    if(bTransmit)
+    if (bTransmit)
     {
         bQueue = pPort->pfServiceTransmitAvail(pPort, bLocalEnd, &qItem);
-        if(bQueue)
+        if (bQueue)
         {
 #ifdef MUSB_OVERHEAD
             qItem.dwTime = pController->pUtils->pfGetTime();
@@ -163,7 +165,7 @@ uint8_t MGC_FcDmaChannelStatusChanged(
     else
     {
         bQueue = pPort->pfServiceReceiveReady(pPort, bLocalEnd, &qItem);
-        if(bQueue)
+        if (bQueue)
         {
 #ifdef MUSB_OVERHEAD
             qItem.dwTime = pController->pUtils->pfGetTime();
@@ -200,17 +202,17 @@ MGC_EndpointResource *MGC_FcBindEndpoint(MGC_Port *pPort,
     bIsIn = (pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_DIR_MASK) ? TRUE : FALSE;
     bIsTx = bIsIn;
     dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-    for(dwEndIndex = 0; dwEndIndex < dwEndCount; dwEndIndex++)
+    for (dwEndIndex = 0; dwEndIndex < dwEndCount; dwEndIndex++)
     {
         pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
         bIsClaimed = pEnd->bIsFifoShared ?
                      pEnd->bIsClaimed : (bIsTx ? pEnd->bIsClaimed : pEnd->bRxClaimed);
-        if(pEnd && !bIsClaimed)
+        if (pEnd && !bIsClaimed)
         {
             wMaxPacketSize = bIsTx ? pEnd->wMaxPacketSizeTx : pEnd->wMaxPacketSizeRx;
             /* need address match, compatible direction and FIFO size */
             bEnd = pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_NUMBER_MASK;
-            if((wMaxPacketSize >= wPacketSize) &&
+            if ((wMaxPacketSize >= wPacketSize) &&
                     (pEnd->bLocalEnd == bEnd))
             {
                 /* found match */
@@ -221,15 +223,15 @@ MGC_EndpointResource *MGC_FcBindEndpoint(MGC_Port *pPort,
     }
 
     /* see if we fulfilled desire */
-    if(pBestReqEnd)
+    if (pBestReqEnd)
     {
         pBestEnd = pBestReqEnd;
     }
 
     /* if we found one, set it up */
-    if(pBestEnd && bBind)
+    if (pBestEnd && bBind)
     {
-        if(pBestEnd->bIsFifoShared || bIsTx)
+        if (pBestEnd->bIsFifoShared || bIsTx)
         {
             pBestEnd->bIsClaimed = TRUE;
         }
@@ -239,7 +241,7 @@ MGC_EndpointResource *MGC_FcBindEndpoint(MGC_Port *pPort,
         }
         pBestEnd->bIsTx = bIsTx;
         pBestEnd->bIsHalted = FALSE;
-        if(bIsTx)
+        if (bIsTx)
         {
             pBestEnd->bBusAddress = pUsbEnd->pDevice->bBusAddress;
             pBestEnd->bBusEnd = pUsbEnd->UsbDescriptor.bEndpointAddress;
@@ -305,22 +307,22 @@ static void MGC_FcFlushAll(MGC_Port *pPort)
 
     /* flush all endpoints */
     dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-    for(dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
+    for (dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
     {
         pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), dwEndIndex);
-        if(pEnd)
+        if (pEnd)
         {
             pEnd->bIsClaimed = FALSE;
             pPort->pfProgramFlushEndpoint(pPort, pEnd, 0, TRUE);
             pPort->pfProgramFlushEndpoint(pPort, pEnd, MUSB_ENDPOINT_DIR_MASK, TRUE);
             wCount = MUSB_ListLength(&(pEnd->TxIrpList));
-            for(wIndex = 0; wIndex < wCount; wIndex++)
+            for (wIndex = 0; wIndex < wCount; wIndex++)
             {
                 pIrp = MUSB_ListFindItem(&(pEnd->TxIrpList), 0);
                 MUSB_ListRemoveItem(&(pEnd->TxIrpList), pIrp);
             }
             wCount = MUSB_ListLength(&(pEnd->RxIrpList));
-            for(wIndex = 0; wIndex < wCount; wIndex++)
+            for (wIndex = 0; wIndex < wCount; wIndex++)
             {
                 pIrp = MUSB_ListFindItem(&(pEnd->RxIrpList), 0);
                 MUSB_ListRemoveItem(&(pEnd->RxIrpList), pIrp);
@@ -346,7 +348,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
     MGC_EndpointResource *pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), 0);
 
     /* peripheral mode: see if Rx or Tx */
-    if(bVal & MGC_M_CSR0_RXPKTRDY)
+    if (bVal & MGC_M_CSR0_RXPKTRDY)
     {
         pPort->wSetupDataIndex = 0;
         pPort->wSetupDataSize = 0;
@@ -356,7 +358,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
                  (pPort->pFunctionClient->wControlBufferLength - pPort->wSetupDataIndex) : 0;
         wFifoCount = MUSB_MIN(wCount, wSpace);
         /* stall on potential overflow or get data */
-        if(!pPort->pFunctionClient || (wCount > wFifoCount))
+        if (!pPort->pFunctionClient || (wCount > wFifoCount))
         {
             /* stall */
             bOutVal |= MGC_M_CSR0_P_SENDSTALL;
@@ -366,7 +368,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
             /* unload FIFO to the right place */
             pFifoDest = pPort->pFunctionClient->pControlBuffer + pPort->wSetupDataIndex;
 #ifdef MUSB_DMA
-            if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+            if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
                         pEnd->pDmaChannel, pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
                         pFifoDest,
                         MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
@@ -381,7 +383,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
             /* check request */
             pRequest = (MUSB_DeviceRequest *)pPort->pFunctionClient->pControlBuffer;
             /* if IN or we got enough OUT data, parse */
-            if((pRequest->bmRequestType & MUSB_DIR_IN) ||
+            if ((pRequest->bmRequestType & MUSB_DIR_IN) ||
                     ((pPort->wSetupDataIndex - 8) >= MUSB_SWAP16P((uint8_t *) & (pRequest->wLength))))
             {
                 pPort->dwSequenceNumber++;
@@ -389,13 +391,13 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
                 pPort->wSetupDataIndex = 0;
                 bResult = FALSE;
                 /* if parsing enabled */
-                if(pPort->bParse)
+                if (pPort->bParse)
                 {
                     /* try to handle it now */
-                    if(!MGC_FunctionParseSetup(pPort, &status))
+                    if (!MGC_FunctionParseSetup(pPort, &status))
                     {
                         /* callback */
-                        if(!pPort->pFunctionClient->pfDeviceRequest(
+                        if (!pPort->pFunctionClient->pfDeviceRequest(
                                     pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
                                     pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
                                     pPort->wSetupDataIndex))
@@ -407,7 +409,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
                     else
                     {
                         /* parser handled it */
-                        if(MUSB_STATUS_STALLED == status)
+                        if (MUSB_STATUS_STALLED == status)
                         {
                             pPort->wSetupDataIndex = 0;
                             pPort->wSetupDataSize = 0;
@@ -422,7 +424,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
                 else
                 {
                     /* parsing disabled; issue callback */
-                    if(!pPort->pFunctionClient->pfDeviceRequest(
+                    if (!pPort->pFunctionClient->pfDeviceRequest(
                                 pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
                                 pPort->dwSequenceNumber, pPort->pFunctionClient->pControlBuffer,
                                 pPort->wSetupDataIndex))
@@ -434,11 +436,11 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
             }
         }
     }
-    else if(!(bVal & MGC_M_CSR0_TXPKTRDY))
+    else if (!(bVal & MGC_M_CSR0_TXPKTRDY))
     {
         /* transmit-ready */
         wFifoCount = MUSB_MIN(64, (pPort->wSetupDataSize - pPort->wSetupDataIndex));
-        if(!wFifoCount)
+        if (!wFifoCount)
         {
             /* status ack */
             pPort->wSetupDataIndex = 0;
@@ -447,7 +449,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
         }
         pFifoDest = pPort->pSetupData + pPort->wSetupDataIndex;
 #ifdef MUSB_DMA
-        if(pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
+        if (pEnd->pDmaChannel && pPort->pDmaController->pfDmaProgramChannel(
                     pEnd->pDmaChannel, pEnd->wPacketSize, pEnd->pDmaChannel->bDesiredMode,
                     pFifoDest,
                     MGC_MIN(wFifoCount, pEnd->pDmaChannel->dwMaxLength)))
@@ -461,7 +463,7 @@ uint8_t MGC_FcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem,
         pPort->pfLoadFifo(pPort, 0, wFifoCount, pFifoDest);
         pPort->wSetupDataIndex += wFifoCount;
         bOutVal |= MGC_M_CSR0_TXPKTRDY;
-        if(pPort->wSetupDataIndex >= pPort->wSetupDataSize)
+        if (pPort->wSetupDataIndex >= pPort->wSetupDataSize)
         {
             bOutVal |= MGC_M_CSR0_P_DATAEND;
         }
@@ -487,21 +489,21 @@ uint8_t MGC_FcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
     uint8_t bResult = 0;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
-    if(bIntrUsbVal)
+    if (bIntrUsbVal)
     {
-        if(bIntrUsbVal & MGC_M_INTR_RESUME)
+        if (bIntrUsbVal & MGC_M_INTR_RESUME)
         {
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_RESUME;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
-        if(bIntrUsbVal & MGC_M_INTR_SUSPEND)
+        if (bIntrUsbVal & MGC_M_INTR_SUSPEND)
         {
             bResult++;
             qItem.bCause = MGC_BSR_CAUSE_SUSPEND;
             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
         }
-        if(bIntrUsbVal & MGC_M_INTR_RESET)
+        if (bIntrUsbVal & MGC_M_INTR_RESET)
         {
 #ifdef MUSB_STATS
             pPort->dwResetCount++;
@@ -513,22 +515,22 @@ uint8_t MGC_FcUsbIsr(MGC_Port *pPort, uint8_t bIntrUsbVal)
             MGC_FunctionChangeState(pPort, MUSB_DEFAULT);
             MGC_FunctionSpeedSet(pPort);
         }
-        if(bIntrUsbVal & MGC_M_INTR_SOF)
+        if (bIntrUsbVal & MGC_M_INTR_SOF)
         {
             /* update frame number */
             pPort->pfReadBusState(pPort);
 
             /* start any waiting isochronous transmits whose wait has expired */
             dwEndCount = MUSB_ArrayLength(&(pPort->LocalEnds));
-            for(dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
+            for (dwEndIndex = 1; dwEndIndex < dwEndCount; dwEndIndex++)
             {
                 pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(
                            &(pPort->LocalEnds), dwEndIndex);
-                if(pEnd && (MUSB_ENDPOINT_XFER_ISOC == pEnd->bTrafficType) &&
+                if (pEnd && (MUSB_ENDPOINT_XFER_ISOC == pEnd->bTrafficType) &&
                         pEnd->dwWaitFrameCount)
                 {
                     pIsochIrp = (MUSB_IsochIrp *)pEnd->pTxIrp;
-                    if(0 == --pEnd->dwWaitFrameCount)
+                    if (0 == --pEnd->dwWaitFrameCount)
                     {
                         pPort->pfProgramStartTransmit(pPort, pEnd,
                                                       pIsochIrp->pBuffer, pIsochIrp->adwLength[0], pIsochIrp);
@@ -565,9 +567,9 @@ uint32_t MGC_FcBsr(void *pParam)
     MUSB_SystemServices *pServices = pController->pSystemServices;
 
     bOk = pServices->pfDequeueBackgroundItem(pServices->pPrivateData, &item);
-    while(bOk)
+    while (bOk)
     {
-        switch(item.bCause)
+        switch (item.bCause)
         {
         case MGC_BSR_CAUSE_RESUME:
             /* resume */
@@ -600,29 +602,29 @@ uint32_t MGC_FcBsr(void *pParam)
                             &(pPort->LocalEnds), item.bLocalEnd);
 #ifdef MUSB_OVERHEAD
             pOverheadStats = MUSB_ArrayFetch(&(pPort->OverheadStats), item.bLocalEnd);
-            if(pOverheadStats)
+            if (pOverheadStats)
             {
                 dwTime = pController->pUtils->pfGetTime() - item.dwTime;
-                if(dwTime < pOverheadStats->dwOverheadMin)
+                if (dwTime < pOverheadStats->dwOverheadMin)
                 {
                     pOverheadStats->dwOverheadMin = dwTime;
                 }
-                if(dwTime > pOverheadStats->dwOverheadMax)
+                if (dwTime > pOverheadStats->dwOverheadMax)
                 {
                     pOverheadStats->dwOverheadMax = dwTime;
                 }
             }
 #endif
-            if(pLocalEnd)
+            if (pLocalEnd)
             {
                 bTrafficType = (MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause) ?
                                pLocalEnd->bTrafficType : pLocalEnd->bRxTrafficType;
-                switch(bTrafficType)
+                switch (bTrafficType)
                 {
                 case MUSB_ENDPOINT_XFER_BULK:
                 case MUSB_ENDPOINT_XFER_INT:
                     pIrp = (MUSB_Irp *)item.pData;
-                    if(pIrp && pIrp->pfIrpComplete)
+                    if (pIrp && pIrp->pfIrpComplete)
                     {
                         pIrp->pfIrpComplete(pIrp->pCompleteParam, pIrp);
                     }
@@ -630,7 +632,7 @@ uint32_t MGC_FcBsr(void *pParam)
 
                 case MUSB_ENDPOINT_XFER_CONTROL:
                     pControlIrp = (MUSB_ControlIrp *)item.pData;
-                    if(pControlIrp && pControlIrp->pfIrpComplete)
+                    if (pControlIrp && pControlIrp->pfIrpComplete)
                     {
                         pControlIrp->pfIrpComplete(pControlIrp->pCompleteParam,
                                                    pControlIrp);
@@ -639,7 +641,7 @@ uint32_t MGC_FcBsr(void *pParam)
 
                 case MUSB_ENDPOINT_XFER_ISOC:
                     pIsochIrp = (MUSB_IsochIrp *)item.pData;
-                    if(pIsochIrp && pIsochIrp->pfIrpComplete)
+                    if (pIsochIrp && pIsochIrp->pfIrpComplete)
                     {
                         pIsochIrp->pfIrpComplete(pIsochIrp->pCompleteParam,
                                                  pIsochIrp);
@@ -647,16 +649,16 @@ uint32_t MGC_FcBsr(void *pParam)
                     break;
                 }
                 /* start next IRP if not started already */
-                if(MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause)
+                if (MGC_BSR_CAUSE_IRP_COMPLETE == item.bCause)
                 {
-                    if(!pLocalEnd->pTxIrp && !pLocalEnd->bStopTx)
+                    if (!pLocalEnd->pTxIrp && !pLocalEnd->bStopTx)
                     {
                         MGC_StartNextIrp(pPort, pLocalEnd, TRUE);
                     }
                 }
                 else
                 {
-                    if(!pLocalEnd->pRxIrp && !pLocalEnd->bIsRxHalted)
+                    if (!pLocalEnd->pRxIrp && !pLocalEnd->bIsRxHalted)
                     {
                         MGC_StartNextIrp(pPort, pLocalEnd, FALSE);
                     }
@@ -682,11 +684,11 @@ MUSB_BusHandle MUSB_RegisterFunctionClient(
     MGC_Port *pImplPort = (MGC_Port *)pPort->pPrivateData;
 
     /* session still active? */
-    if(!pImplPort->bSessionActive && (MUSB_PORT_TYPE_FUNCTION == pPort->Type))
+    if (!pImplPort->bSessionActive && (MUSB_PORT_TYPE_FUNCTION == pPort->Type))
     {
         /* function client requires verification */
         dwStatus = MGC_FunctionRegisterClient(pImplPort, pFunctionClient);
-        if(0 == dwStatus)
+        if (0 == dwStatus)
         {
             /* nothing active; reset port */
             pImplPort->pfResetPort(pImplPort);

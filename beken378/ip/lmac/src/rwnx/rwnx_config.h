@@ -53,7 +53,7 @@
 #define CFG_TXDESC0       1 
 #define CFG_TXDESC1       1
 #if !CFG_LESS_MEMERY_IN_RWNX
-#define CFG_TXDESC2       32 
+#define CFG_TXDESC2       64 
 #else
 #define CFG_TXDESC2       16 
 #endif
@@ -208,8 +208,6 @@
 #define CELL_GRANULARITY            (1024)
 #define CELL_COUNT                  (64)
 
-/// Deep Sleep
-#define DEEP_SLEEP        0
 
 /// UAPSD support
 #if defined CFG_UAPSD
@@ -507,7 +505,8 @@
                                                         + 256 * NX_REMOTE_STA_MAX \
                                                         + CELL_COUNT * CELL_GRANULARITY \
                                                         + 20 * 1024)
-                                                        
+
+#define NX_TX_PTK_RETRY_NEMBER                   (7)                                                    
 #endif // _RWNX_CONFIG_H_
 // eof
 

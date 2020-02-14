@@ -1,5 +1,11 @@
-#ifndef NETSTREAM_H__
-#define NETSTREAM_H__
+/*
+ * File: netstream.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
+ */
+
+#ifndef __NETSTREAM_H__
+#define __NETSTREAM_H__
 
 #define NS_EVENT_OPEN_DONE      (1 << 0)
 #define NS_EVENT_OPEN_FAILED    (1 << 1)
@@ -34,7 +40,7 @@ struct network_stream_job
 struct audio_stream* network_stream_open(const char* URI);
 struct audio_stream* network_stream_open_websession(struct webclient_session* session);
 struct audio_stream *network_stream_open_data(int codec_type, int len); 
-
 int network_stream_init(void);
+int _readline(struct webclient_session* session, char *line_buf, int size); 
 
 #endif

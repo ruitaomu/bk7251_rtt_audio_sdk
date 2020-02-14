@@ -125,5 +125,4 @@ extern void MUSB_MsdDisconnect (void           *pPrivateData,
                                 MUSB_Device    *pUsbDevice);
 #endif // CFG_SUPPORT_MSD
 #endif /* _MUSB_MSD_API_H_ */
-// eof
 

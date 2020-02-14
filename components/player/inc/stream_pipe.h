@@ -1,8 +1,20 @@
-#ifndef STREAM_PIPE_H__
-#define STREAM_PIPE_H__
+/*
+ * File: stream_pipe.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
+ */
+
+#ifndef __STREAM_PIPE_H__
+#define __STREAM_PIPE_H__
 
 #define PIPE_START_OF_STREAM    0
 #define PIPE_END_OF_STREAM      1
+
+enum STREAM_PIPE_EVENT
+{
+    STREAM_PIPE_EMPTY, 
+    STREAM_PIPE_RESUME, 
+};
 
 /* ring buffer */
 struct rb_buffer
@@ -51,5 +63,6 @@ int stream_pipe_write(struct stream_pipe *pipe, const void *buf, uint32_t size, 
 int stream_pipe_read(struct stream_pipe *pipe, void *buf, uint32_t size, int timeout);
 
 rt_uint32_t rb_buffer_data_len(struct rb_buffer *rb); 
+int stream_pipe_set_event_callback(void (*callback)(int event, void *user_data), void *user_data); 
 
 #endif

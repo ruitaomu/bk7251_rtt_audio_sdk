@@ -433,6 +433,41 @@ int wifi_demo(int argc, char **argv)
 		return 0;
 	}
 
+	if(strcmp(argv[1], "status") == 0)
+	{
+		if(argc != 3)
+		{
+			os_printf("parameter invalid\r\n");
+		}
+
+		if(strcmp(argv[2], "net") == 0)
+		{
+			demo_ip_app_init();
+		}
+		else if(strcmp(argv[2], "link") == 0)
+		{
+			demo_state_app_init();
+		}
+		else
+		{
+			os_printf("parameter invalid\r\n");
+		}
+	}
+
+	if(strcmp(argv[1], "scan") == 0)
+	{
+		if(argc == 2)
+		{
+			demo_scan_app_init();
+		}else if(argc == 3)
+		{
+			demo_scan_adv_app_init(argv[2]);
+		}else
+		{
+			os_printf("parameter invalid\r\n");
+		}
+	}
+
 	if(strcmp(argv[1], "monitor") == 0)
 	{
 		if(argc != 3)

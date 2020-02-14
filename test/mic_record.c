@@ -26,6 +26,7 @@ void record_and_play(int argc,char *argv[])
 	uint16_t *buffer = NULL;
 
 	int vad_on;
+	int count = 0;
 	
 #if CONFIG_SOUND_MIXER
     mixer_pause();
@@ -63,11 +64,16 @@ void record_and_play(int argc,char *argv[])
 		char *val = NULL;
 		
 		if(mic_read_len > TEST_BUFF_LEN - READ_SIZE)
+		{
+			rt_kprintf("break : mic_read_len=%d \r\n",mic_read_len);
 			break;
-
+		}
+		
 		if (!vad_on)
 		{
 		    actual_len = audio_device_mic_read(test_buf+mic_read_len,READ_SIZE);
+			
+			mic_read_len += actual_len;
 		}
 		else
 		{
@@ -76,10 +82,26 @@ void record_and_play(int argc,char *argv[])
 		    {
 		        rt_kprintf("Vad Detected !!!!!!!!\r\n");			/*检测到声音*/
 			    break;
-		    }
+		    }	
+			
+			mic_read_len += actual_len;
+			
+			count ++;
+			
+			if(count >= 2000)
+			{
+				rt_kprintf("vad record time out \r\n");
+				break;
+			}
+				
+			
+if(mic_read_len > TEST_BUFF_LEN - READ_SIZE)
+			{
+				mic_read_len = 0;
+			
+			}
 		}
-
-		mic_read_len += actual_len;
+				
 	}
 
 	if (vad_on)

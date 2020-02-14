@@ -28,7 +28,7 @@
 #include "ke_msg.h"
 #include "lwip/pbuf.h"
 
-#define RW_BAK_REG_LEN               (102)
+#define RW_BAK_REG_LEN               (103)
 
 typedef struct rw_rx_info_st {
     /// Index of the station that sent the frame. 0xFF if unknown.
@@ -141,10 +141,15 @@ typedef void (*IDLE_FUNC)(void);
 extern bool rwnxl_sleep(IDLE_FUNC wait_func,IDLE_FUNC do_func);
 extern void rwnxl_wakeup(IDLE_FUNC wait_func);
 extern void rwnxl_set_nxmac_timer_value(void);
+extern void wifi_mac_state_set_idle(void);
+extern void wifi_mac_state_set_active(void);
+extern void wifi_mac_state_set_prev(void);
 
 #endif
 
 extern void rwnxl_register_connector(RW_CONNECTOR_T *intf);
+
+extern uint32_t rwnx_get_pkt_retry_numb( void ) __attribute__ ((weak));
 
 /// @}
 #endif // _RWNXL_H_

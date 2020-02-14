@@ -170,12 +170,18 @@
 #endif // (CFG_SOC_NAME == SOC_BK7231)
 
 #define SCTRL_ANALOG_CTRL3                    (SCTRL_BASE + 25 * 4)
+#define CHARGE_LC2CVDLYLV_MASK                 (0x7)
+#define CHARGE_LC2CVDLYLV_POS                  (29)
+#define CHARGE_VLCSWLV_MASK                     (0xF)
+#define CHARGE_VLCSWLV_POS                      (23)
 #define CHARGE_LCP_MASK                        (0x1F)
 #define CHARGE_LCP_POS                         (8)
 
 #define SCTRL_ANALOG_CTRL4                    (SCTRL_BASE + 26 * 4)
 #define VSEL_SYS_LDO_POSI                        (27)
 #define VSEL_SYS_LDO_MASK                        (0x3)
+#define CHARGE_MANMODE_MASK                        (0x7)
+#define CHARGE_MANMODE_POS                         (16)
 
 #define SCTRL_ANALOG_CTRL5                    (SCTRL_BASE + 0x1B*4)
 
@@ -265,6 +271,8 @@
 #define LPO_SRC_32K_XTAL                         (0x1)
 #define LPO_SRC_32K_DIV                          (0x2)
 
+#define DEEP_SLEEP_LPO_SRC        LPO_SRC_32K_XTAL
+
 #define SCTRL_SLEEP                           (SCTRL_BASE + 65 * 4)
 #define PROCORE_DLY_POSI                            (20)
 #define PROCORE_DLY_MASK                            (0xF)
@@ -335,6 +343,12 @@
 #define GPIO_WAKEUP_ENABLE_FLAG                  (1)
 #define GPIO_WAKEUP_TYPE_POSITIVE_EDGE           (0)
 #define GPIO_WAKEUP_TYPE_NEGATIVE_EDGE           (1)
+
+#define SCTRL_USB_PLUG_WAKEUP                   (SCTRL_BASE + 78 * 4)
+#define USB_PLUG_IN_EN_BIT                      (1 << 0)
+#define USB_PLUG_OUT_EN_BIT                     (1 << 1)
+#define USB_PLUG_IN_INT_BIT                     (1 << 2)
+#define USB_PLUG_OUT_INT_BIT                    (1 << 3)
 
 #define SCTRL_GPIO_WAKEUP_EN1                  (SCTRL_BASE + 81 * 4)
 #define SCTRL_GPIO_WAKEUP_TYPE1                (SCTRL_BASE + 82 * 4)
@@ -443,6 +457,7 @@ enum
 #define SCTRL_BLOCK_EN_MUX						(SCTRL_BASE + 79 * 4)
 #define SCTRL_ROSC_TIMER_PERIOD_HIGH		(SCTRL_BASE + 80*4)	
 
+#define SCTRL_SW_RETENTION                     (SCTRL_BASE + 84 * 4)
 
 #define DCO_CNTI_120M           (0x127U)  // set DCO out clk with 120M
 

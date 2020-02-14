@@ -27,13 +27,14 @@
 #include <rtdevice.h>
 
 #define RT_RTC_YEARS_MAX         137
-#define RT_ALARM_DELAY             2
+#define RT_ALARM_DELAY             0
 #define RT_ALARM_STATE_INITED   0x02
 #define RT_ALARM_STATE_START    0x01
 #define RT_ALARM_STATE_STOP     0x00
 
 #if (defined(RT_USING_RTC) && defined(RT_USING_ALARM))
 static struct rt_alarm_container _container;
+rt_thread_t alarm_tid = NULL;
 
 rt_inline rt_uint32_t alarm_mkdaysec(struct tm *time)
 {
@@ -388,7 +389,10 @@ _exit:
  */
 void rt_alarm_update(rt_device_t dev, rt_uint32_t event)
 {
-    rt_event_send(&_container.event, 1);
+    if(alarm_tid)
+    {
+        rt_event_send(&_container.event, 1);
+    }
 }
 
 /** \brief modify the alarm setup
@@ -600,13 +604,12 @@ static void rt_alarmsvc_thread_init(void *param)
     }
 }
 
-
 /** \brief initialize alarm service system
  *
  * \param none
  * \return none
  */
-void rt_alarm_system_init(void)
+int rt_alarm_system_init(void)
 {
     rt_thread_t tid;
 
@@ -618,6 +621,17 @@ void rt_alarm_system_init(void)
                            rt_alarmsvc_thread_init, RT_NULL,
                            512, 8, 1);
     if (tid != RT_NULL)
+    {
         rt_thread_startup(tid);
+        alarm_tid = tid;
+    }
+    else
+    {
+        rt_kprintf("rt alarm init failed\n");
+    } 
+
+    return 0;
 }
+INIT_COMPONENT_EXPORT(rt_alarm_system_init);
+
 #endif

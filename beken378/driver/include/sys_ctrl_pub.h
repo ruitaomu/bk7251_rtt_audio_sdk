@@ -94,10 +94,26 @@ enum
     CMD_SCTRL_SET_ANALOG8,
     CMD_SCTRL_SET_ANALOG9,
     CMD_SCTRL_SET_ANALOG10,
+    CMD_SCTRL_GET_ANALOG0,
+    CMD_SCTRL_GET_ANALOG1,
+    CMD_SCTRL_GET_ANALOG2,
+    CMD_SCTRL_GET_ANALOG3,
+    CMD_SCTRL_GET_ANALOG4,
+    CMD_SCTRL_GET_ANALOG5,
+    CMD_SCTRL_GET_ANALOG6,
+    CMD_SCTRL_GET_ANALOG7,
+    CMD_SCTRL_GET_ANALOG8,
+    CMD_SCTRL_GET_ANALOG9,
+    CMD_SCTRL_GET_ANALOG10,
     CMD_SCTRL_AUDIO_PLL,
     CMD_SCTRL_USB_CHARGE_CAL,
     CMD_SCTRL_USB_CHARGE_START,
     CMD_SCTRL_USB_CHARGE_STOP,
+    CMD_SCTRL_UNCONDITIONAL_RF_DOWN,
+    CMD_SCTRL_UNCONDITIONAL_RF_UP,
+    CMD_SCTRL_UNCONDITIONAL_MAC_DOWN,
+    CMD_SCTRL_UNCONDITIONAL_MAC_UP,
+    
 	#endif // (CFG_SOC_NAME == SOC_BK7221)
 };
 
@@ -217,12 +233,38 @@ typedef struct efuse_oper_st
     UINT8 data;    
 } EFUSE_OPER_ST, *EFUSE_OPER_PTR;
 
+typedef enum
+{
+    INTERNAL_HW_MODE = 0,
+    INTERNAL_SW_MODE = 1,
+    EXTERNAL_HW_MODE = 2,
+    EXTERNAL_SW_MODE = 3,
+} CHARGE_TYPE;
+
+typedef enum
+{
+    STEP_STOP = 0,
+    STEP_START = 1,
+    STEP_TRICKLE = 2,
+    STEP_EXTER_CC = 3,
+    STEP_INTER_CC = 4,
+    STEP_INTER_CV = 5,
+
+} CHARGE_STEP;
+
 typedef struct charge_oper_st
 {
-    UINT8 type;
-    UINT8 oper;
+    CHARGE_TYPE type;
+    CHARGE_STEP step;
+    UINT32 elect;
     UINT8 cal[3];
 } CHARGE_OPER_ST, *CHARGE_OPER_PTR;
+
+#define CHARGE_ANALOG_CTRL3_CAL_DEFAULT_VALUE       (0x180004A0)
+#define CHARGE_ANALOG_CTRL3_CHARGE_DEFAULT_VALUE    (0x180704A0)
+#define CHARGE_ANALOG_CTRL4_CAL_DEFAULT_VALUE       (0xC2400520)
+#define CHARGE_ANALOG_CTRL4_CHARGE_DEFAULT_VALUE    (0xC2401520)
+
 
 #define AUDIO_DAC_VOL_DIFF_MODE                      (0)
 #define AUDIO_DAC_VOL_SINGLE_MODE                    (1)
@@ -232,8 +274,10 @@ typedef struct charge_oper_st
 
 #define EFUSE_ENCRYPT_WORD_ADDR                      (0)
 #define EFUSE_ENCRYPT_WORD_LEN                       (16)
-#define EFUSE_UID_ADDR                               (16)
-#define EFUSE_UID_LEN                                (8)
+#define EFUSE_CHARGE_CAL_ADDR                        (16)
+#define EFUSE_CHARGE_CAL_LEN                         (4)
+#define EFUSE_UID_ADDR                               (20)
+#define EFUSE_UID_LEN                                (4)
 #define EFUSE_MAC_START_ADDR                         (24)
 #define EFUSE_MAC_LEN                                (6)
 #define EFUSE_USER_AREA_ADDR                         (30)
@@ -269,5 +313,5 @@ extern void sctrl_rf_wakeup(void);
 extern void sctrl_sta_ps_init(void);
 extern void sctrl_flash_select_dco(void);
 extern UINT32 charger_is_full(void);
-extern UINT32 usb_is_pluged(void);
+extern UINT32 usb_power_is_pluged(void);
 #endif // _SCTRL_PUB_H_

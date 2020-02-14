@@ -8,14 +8,14 @@
 /*soft wakeup*/
 #define WAKEUP_TEST
 
-/*list play demo*/
-#define LIST_PLAY_TEST
-
 /*mixer demo*/
 #define MIXER_DEMO
 
-/*jpeg decoder*/
-#define JPEG_TO_RGB_TEST
+/*flipping check*/
+#define FLIP_CHECK_TEST
 
+/*wantong test*/
+#define WANTONG_TEST
 #endif
-
+#define FLIP_CHECK_TEST
+#define WANTONG_TEST

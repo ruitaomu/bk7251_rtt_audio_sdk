@@ -13,14 +13,18 @@
 #include <finsh.h>
 
 #include "webclient.h"
-#include "webclient_internal.h"
 #include <fal.h>
 #include <rt_ota.h>
 
 #include "BkDriverFlash.h"
 #include "drv_flash.h"
 
-#include "http_client_ota.h"
+#define DBG_ENABLE
+#define DBG_SECTION_NAME "httpota"
+#define DBG_LEVEL        DBG_LOG
+// #define DBG_LEVEL        DBG_INFO
+#define DBG_COLOR
+#include <rtdbg.h>
 
 #define HTTP_OTA_BUFF_LEN 4096
 #define HTTP_OTA_DL_DELAY (10 * RT_TICK_PER_SECOND)
@@ -60,8 +64,9 @@ static void print_progress(size_t cur_size, size_t total_size)
 
 static int http_ota_fw_download(const char *uri)
 {
-    int res,  length, total_length = 0;
-    rt_uint8_t need_reboot=0;
+    int res, length, total_length = 0;
+    rt_uint8_t need_reboot = 0;
+    int resp_status = (-1);
 
     rt_uint8_t *buffer_read = RT_NULL;
     rt_uint8_t *buffer_swap = RT_NULL;
@@ -81,42 +86,43 @@ static int http_ota_fw_download(const char *uri)
         rt_kprintf("not found %s partition \n", RT_BK_APP_NAME);
     }
 
-    session = webclient_open(uri);
+    session = webclient_session_create(1024); 
     if (!session)
     {
-        log_e("open uri failed.");
+        LOG_E("open uri failed.");
         goto __exit;
     }
 
-    if (session->response == 304)
+    resp_status = webclient_get(session, uri);
+    if (resp_status == 304)
     {
-        log_e("Firmware download failed! Server http response : 304 not modified!");
+        LOG_E("Firmware download failed! Server http response : 304 not modified!");
         goto __exit;
     }
 
-    if (session->response != 200)
+    if (resp_status != 200)
     {
-        log_e("Firmware download failed! Server http response : %d !", session->response);
+        LOG_E("Firmware download failed! Server http response : %d !", resp_status);
         goto __exit;
     }
 
     if (session->content_length == 0)
     {
-        log_i("Request file size is 0!");
+        LOG_I("Request file size is 0!");
         goto __exit;
     }
 
     /* Get download partition information and erase download partition data */
     if ((dl_part = fal_partition_find(RT_BK_DL_PART_NAME)) == RT_NULL)
     {
-        log_e("Firmware download failed! Partition (%s) find error!", RT_BK_DL_PART_NAME);
+        LOG_E("Firmware download failed! Partition (%s) find error!", RT_BK_DL_PART_NAME);
         goto __exit;
     }
 
     // Check if the OTA file is too large
     if (session->content_length > dl_part->len)
     {
-        log_e("Firmware download failed! OTA file is too big!");
+        LOG_E("Firmware download failed! OTA file is too big!");
         goto __exit;
     }
 
@@ -126,13 +132,13 @@ static int http_ota_fw_download(const char *uri)
     rt_kprintf("dl_part->offset: 0x%08X\n", dl_part->offset);
     rt_kprintf("dl_part->len   : %d\n", dl_part->len);
 
-    log_i("OTA file size is (%d)", session->content_length);
+    LOG_I("OTA file size is (%d)", session->content_length);
 
     buffer_read = web_malloc(HTTP_OTA_BUFF_LEN);
     buffer_swap = web_malloc(HTTP_OTA_BUFF_LEN);
     if ((buffer_read == RT_NULL) || (buffer_swap == RT_NULL))
     {
-        log_e("No memory for http ota!");
+        LOG_E("No memory for http ota!");
         goto __exit;
     }
 
@@ -158,7 +164,7 @@ static int http_ota_fw_download(const char *uri)
                 log_e("read error: %d, content_pos:%d, page_pos:%d\n", length, total_length, page_pos);
                 break;
             }
-            //log_i("webclient_read %d\n", length);
+            //LOG_I("webclient_read %d\n", length);
             page_pos += length;
         }
         while (page_pos < nw);   /* read */
@@ -191,7 +197,7 @@ static int http_ota_fw_download(const char *uri)
                     version = (const char *)&buffer_read[28];
                     timestamp = (uint32_t *)&buffer_read[8];
 
-                    log_i("OTA file describe partition name %s, version: %s, timestamp: %d.\n", desc_part_name, version, *timestamp);
+                    LOG_I("OTA file describe partition name %s, version: %s, timestamp: %d.\n", desc_part_name, version, *timestamp);
                 }
 
                 // If a partition exists in our partition table, check described partition size
@@ -201,20 +207,20 @@ static int http_ota_fw_download(const char *uri)
                     // Check the OTA raw size is larger than the size of the described partition
                     if (raw_size > (desc_part->len - 96))
                     {
-                        log_e("Firmware download failed! The firmware raw size is too big!");
+                        LOG_E("Firmware download failed! The firmware raw size is too big!");
                         goto __exit;
                     }
                 }
             }
 
             log_i("FLASH_PROTECT_HALF.\n");
-            bk_flash_enable_security(FLASH_PROTECT_HALF); // half or custom
+            bk_flash_enable_security(/*FLASH_PROTECT_HALF*/FLASH_PROTECT_NONE); // half or custom
         }
 
         res = fal_partition_read(dl_part, total_length, buffer_swap, nw);
         if (res < 0)
         {
-            log_e("rt_ota_partition_read failed! res:%d, postion:%d, len:%d", res, total_length, nw);
+            LOG_E("rt_ota_partition_read failed! res:%d, postion:%d, len:%d", res, total_length, nw);
             goto __exit;
         }
 
@@ -223,14 +229,14 @@ static int http_ota_fw_download(const char *uri)
             res = fal_partition_erase(dl_part, total_length, nw);
             if (res < 0)
             {
-                log_e("rt_ota_partition_erase failed! res:%d, postion:%d, len:%d", res, total_length, nw);
+                LOG_E("rt_ota_partition_erase failed! res:%d, postion:%d, len:%d", res, total_length, nw);
                 goto __exit;
             }
 
             res = fal_partition_write(dl_part, total_length, buffer_read, nw);
             if (res < 0)
             {
-                log_e("Firmware download failed! Partition (%s) write data error!", dl_part->name);
+                LOG_E("Firmware download failed! Partition (%s) write data error!", dl_part->name);
                 goto __exit;
             }
 
@@ -239,14 +245,14 @@ static int http_ota_fw_download(const char *uri)
             res = fal_partition_read(dl_part, total_length, buffer_swap, nw);
             if (res < 0)
             {
-                log_e("rt_ota_partition_read failed! res:%d, postion:%d, len:%d", res, total_length, nw);
+                LOG_E("rt_ota_partition_read failed! res:%d, postion:%d, len:%d", res, total_length, nw);
                 goto __exit;
             }
 
             /* verify */
             if (memcmp(buffer_read, buffer_swap, nw) != 0)
             {
-                log_e("verify failed! postion:%d, len:%d", total_length, nw);
+                LOG_E("verify failed! postion:%d, len:%d", total_length, nw);
                 goto __exit;
             }
 #endif
@@ -261,7 +267,7 @@ static int http_ota_fw_download(const char *uri)
         /* Check the download partition to verify the partition integrity */
         if (rt_ota_part_fw_verify(dl_part) < 0)
         {
-            log_e("Firmware download failed! Partition (%s) header and body verify failed!", RT_BK_DL_PART_NAME);
+            LOG_E("Firmware download failed! Partition (%s) header and body verify failed!", RT_BK_DL_PART_NAME);
             goto __exit;
         }
         // rt_thread_delay(rt_tick_from_millisecond(5));
@@ -297,7 +303,7 @@ void http_ota(uint8_t argc, char **argv)
 
     if (parts_num <= 0)
     {
-        log_e("Initialize failed! Don't found the partition table.");
+        LOG_E("Initialize failed! Don't found the partition table.");
         return;
     }
     if (argc < 2)

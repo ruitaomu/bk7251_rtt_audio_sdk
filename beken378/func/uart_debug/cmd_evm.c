@@ -24,6 +24,7 @@
 
 #include "arm_arch.h"
 #include "sys_ctrl_pub.h"
+#include "power_save_pub.h"
 
 typedef enum {
     TXEVM_E_STOP     = 0,
@@ -410,11 +411,19 @@ int do_evm(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
             
 #if CFG_USE_USB_CHARGE
 #if (CFG_SOC_NAME == SOC_BK7221U)
+            case 'h': {
+                //vbat adc cal step1
+                extern void vbat_adc_cal_step1();
+                vbat_adc_cal_step1();
+                return 0;
+            }
+            break;
             case 'a': {
-                extern void usb_charger_calibration(UINT32);
+                //vbat adc cal step2 and charge cal
+                extern void usb_charger_calibration();
                 UINT32 charge_cal_type ;
                 charge_cal_type = os_strtoul(argv[arg_id + 1], NULL, 10);
-                usb_charger_calibration(charge_cal_type);
+                usb_charger_calibration();
                 return 0;
             }
             break;

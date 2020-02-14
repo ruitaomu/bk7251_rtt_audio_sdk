@@ -61,6 +61,7 @@ static MUSB_SystemUtils MGC_gNoneUtils =
 extern void MUSB_Start_Fun(void *pParam);
 extern void MUSB_HfiDeviceRemoved(void);
 extern void MUSB_Disconn_Fun(void *pParam);
+extern uint8_t MUSB_GetConnect_Flag(void);
 
 /*************************** FUNCTIONS ****************************/
 /*
@@ -71,7 +72,8 @@ static uint8_t MGC_NoneQueueBackgroundItem(void *pPrivate, const void *pItem)
     uint8_t *pQueueItem;
     MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivate;
 
-    if(QUEUE_FULL_STATUS == pSystem->bQueueStatus)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (QUEUE_FULL_STATUS == pSystem->bQueueStatus)
     {
         MUSB_PRT("mgc_queue_full:%x\r\n", pSystem->pController->wQueueLength);
         return FALSE;
@@ -81,12 +83,12 @@ static uint8_t MGC_NoneQueueBackgroundItem(void *pPrivate, const void *pItem)
                  (pSystem->pController->wQueueItemSize * pSystem->wNextQueueItem++);
 
     MUSB_MemCopy(pQueueItem, pItem, pSystem->pController->wQueueItemSize);
-    if(pSystem->wNextQueueItem >= pSystem->pController->wQueueLength)
+    if (pSystem->wNextQueueItem >= pSystem->pController->wQueueLength)
     {
         pSystem->wNextQueueItem = 0;
     }
 
-    if(pSystem->wNextDequeueItem == pSystem->wNextQueueItem)
+    if (pSystem->wNextDequeueItem == pSystem->wNextQueueItem)
     {
         pSystem->bQueueStatus = QUEUE_FULL_STATUS;
     }
@@ -110,7 +112,8 @@ static uint8_t MGC_NoneDequeueBackgroundItem(void *pPrivate, void *pItem)
     MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivate;
     uint8_t *pQueueItem = NULL;
 
-    if(QUEUE_EMPTY_STATUS == pSystem->bQueueStatus)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (QUEUE_EMPTY_STATUS == pSystem->bQueueStatus)
     {
         return FALSE;
     }
@@ -119,12 +122,12 @@ static uint8_t MGC_NoneDequeueBackgroundItem(void *pPrivate, void *pItem)
                  (pSystem->pController->wQueueItemSize * pSystem->wNextDequeueItem++);
     MUSB_MemCopy(pItem, pQueueItem, pSystem->pController->wQueueItemSize);
 
-    if(pSystem->wNextDequeueItem >= pSystem->pController->wQueueLength)
+    if (pSystem->wNextDequeueItem >= pSystem->pController->wQueueLength)
     {
         pSystem->wNextDequeueItem = 0;
     }
 
-    if(pSystem->wNextDequeueItem == pSystem->wNextQueueItem)
+    if (pSystem->wNextDequeueItem == pSystem->wNextQueueItem)
     {
         pSystem->bQueueStatus = QUEUE_EMPTY_STATUS;
     }
@@ -138,6 +141,8 @@ static uint8_t MGC_NoneDequeueBackgroundItem(void *pPrivate, void *pItem)
 static void MGC_NoneFlushBackgroundQueue(void *pPrivate)
 {
     MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivate;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pSystem->wNextQueueItem = 0;
     pSystem->wNextDequeueItem = 0;
     pSystem->bQueueStatus = QUEUE_EMPTY_STATUS;
@@ -148,6 +153,7 @@ static void MGC_NoneFlushBackgroundQueue(void *pPrivate)
 */
 static uint8_t MGC_NoneLock(void *pPrivate, uint16_t wIndex)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /*
      * No locking needed in non-concurrent environment
      * (ISR restores any "damage" it does)
@@ -160,6 +166,7 @@ static uint8_t MGC_NoneLock(void *pPrivate, uint16_t wIndex)
 */
 static uint8_t MGC_NoneUnlock(void *pPrivate, uint16_t wIndex)
 {
+	MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /*
      * No locking needed in non-concurrent environment
      * (ISR restores any "damage" it does)
@@ -172,27 +179,31 @@ static uint8_t MGC_NoneUnlock(void *pPrivate, uint16_t wIndex)
  */
 static uint8_t MGC_NoneControllerIsr(void *pPrivateData)
 {
-    int isrValue;
-    volatile MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivateData;
+    int isrValue = 0;
+    volatile MGC_NoneSystem* pSystem = (MGC_NoneSystem*)pPrivateData;
 
     MUSB_NPRT("[MGC] NoneControllerIsr\r\n");
-    if ((pSystem)
-            && (pSystem->pController)
-            && (pSystem->pController->pfIsr))
+    if (pSystem)
     {
-        isrValue = pSystem->pController->pfIsr(pSystem->pController->pIsrParam);
-
+        if (pSystem->pController)
+        {
+            if (pSystem->pController->pfIsr)
+            {
+                // MGC_FdrcIsr()
+                isrValue = pSystem->pController->pfIsr(pSystem->pController->pIsrParam);
+            }
+        }
     }
 
-    if(isrValue < 0)
+    if (isrValue < 0)
     {
         return FALSE;
     }
 
-    if(isrValue > 0)
+    if (isrValue > 0)
     {
         pSystem->bBsrRequest++;
-        if(!pSystem->bBsrRequest)
+        if (!pSystem->bBsrRequest)
         {
             pSystem->bBsrOver++;
         }
@@ -211,6 +222,7 @@ uint8_t MGC_NoneArmTimer(void *pPrivateData, uint16_t wIndex,
 {
     MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return MUSB_BoardArmTimer(pSystem->pBoardPrivateData,
                               wIndex,
                               dwTime,
@@ -227,23 +239,28 @@ uint8_t MGC_NoneCancelTimer(void *pPrivateData, uint16_t wIndex)
 {
     MGC_NoneSystem *pSystem = (MGC_NoneSystem *)pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return MUSB_BoardCancelTimer(pSystem->pBoardPrivateData, wIndex);
 }
 
+/*
+ * Implementation
+ */
 uint32_t MUSB_NoneRunBackground(void)
 {
     uint8_t bBsrOver;
     uint32_t RetVal = 0;
     volatile MGC_NoneSystem *pSystem;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pSystem = MGC_apNoneSystem;
     bBsrOver = pSystem->bBsrOver;
-    if((pSystem->bBsrRequest > pSystem->bBsrRan) || bBsrOver)
+    if ((pSystem->bBsrRequest > pSystem->bBsrRan) || bBsrOver)
     {
         pSystem->bBsrRan++;
 
         RetVal = pSystem->pController->pfBsr(pSystem->pController->pBsrParam);
-        if(!pSystem->bBsrRan)
+        if (!pSystem->bBsrRan)
             pSystem->bBsrOver = 0;
     }
 
@@ -256,15 +273,21 @@ void MUSB_Host_init(void)
 {
     volatile MGC_NoneSystem *pSystem;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_PRT("[MGC] Host_init\r\n");
 
-    pSystem = MGC_apNoneSystem;
-    MUSB_Start_Fun(pSystem->pController->pBsrParam);
+	if (MUSB_GetConnect_Flag() == 1)
+	{
+        pSystem = MGC_apNoneSystem;
+        MUSB_Start_Fun(pSystem->pController->pBsrParam);
+	}
 }
 
 void MUSB_Host_uninit(void)
 {
     volatile MGC_NoneSystem *pSystem;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_HfiDeviceRemoved();
 
     MUSB_NoneRunBackground();
@@ -280,7 +303,7 @@ static void *MGC_NoneInitController(const MUSB_NoneController *pControllerInfo)
     static MGC_NoneSystem pSystem;
     static uint8_t QueueData[SYSTEM_QUEUE_DATA_LEN];
 
-    MUSB_PRT("\r\n\r\n[MGC]NoneInitController\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     MUSB_MemSet(&pSystem, 0, sizeof(MGC_NoneSystem));
     pSystem.Services.wVersion = MUSB_SYSTEM_SERVICES_VERSION;
@@ -305,21 +328,29 @@ static void *MGC_NoneInitController(const MUSB_NoneController *pControllerInfo)
                                     pControllerInfo,
                                     &pBaseIsr,
                                     &pBaseBsr);
+	    if (!pSystem.pBoardPrivateData)
+	    {
+            break;
+	    }
 
         /* try UCD init */
         pSystem.pController = MUSB_NewController(&MGC_gNoneUtils,
                               pControllerInfo->wType,
                               pBaseIsr,
                               pBaseBsr);
-        if(!pSystem.pController)
+        if (!pSystem.pController)
         {
+		    MUSB_BoardDestroyController(pSystem.pBoardPrivateData);
+		    break;
         }
 
         /* try target-specific timer init now that we know the requirements */
-        if(!MUSB_BoardInitTimers(pSystem.pBoardPrivateData,
+        if (!MUSB_BoardInitTimers(pSystem.pBoardPrivateData,
                                  pSystem.pController->wTimerCount,
                                  pSystem.pController->adwTimerResolutions))
         {
+		    MUSB_BoardDestroyController(pSystem.pBoardPrivateData);
+		    break;
         }
 
         /* prepare queue */
@@ -332,14 +363,13 @@ static void *MGC_NoneInitController(const MUSB_NoneController *pControllerInfo)
 
         dwStatus = MUSB_StartController(pSystem.pController,
                                         &(pSystem.Services));
-        if(MUSB_STATUS_OK != dwStatus)
+        if (MUSB_STATUS_OK != dwStatus)
         {
         }
     }
-    while(FALSE);
+    while (FALSE);
 
     return &pSystem;
-
 }
 
 /*
@@ -350,10 +380,11 @@ uint8_t MUSB_InitSystem(unsigned long dwBsrPriority)
 {
     MGC_NoneSystem *pSystem;
 
-    MGC_apNoneSystem = 0;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MGC_apNoneSystem = NULL;
 
     pSystem = MGC_NoneInitController(&(MUSB_aNoneController[0]));
-    if(pSystem)
+    if (pSystem)
     {
         MGC_apNoneSystem = pSystem;
     }

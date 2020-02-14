@@ -30,5 +30,7 @@ void adc_obj_stop(ADC_OBJ* handle);
 void saradc_config_vddram_voltage(UINT32 vol);
 void saradc_work_create(UINT32 scan_interval_ms);
 void saradc_disable_vddram_voltage();
-
+int saradc_get_adcdata(unsigned char channel, unsigned char mode,
+					  unsigned char pre_div, unsigned char samp_rate,
+					  unsigned short usCount,unsigned short *usData);
 #endif

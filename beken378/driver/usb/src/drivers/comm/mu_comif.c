@@ -25,7 +25,7 @@
 #include "mu_mem.h"
 #include "mu_nci.h"
 #include "mu_stdio.h"
-#include "class/mu_ccd.h"
+//#include "class/mu_ccd.h"
 #include "mu_comif.h"
 
 #define MUSB_CCD_ETHERNET_RX_QSIZE	4

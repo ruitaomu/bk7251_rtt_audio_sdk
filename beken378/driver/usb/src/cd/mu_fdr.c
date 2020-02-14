@@ -44,14 +44,16 @@ uint8_t MGC_FdrcInit(MGC_Port *pPort)
     uint8_t *pBase = (uint8_t *)pImplController->pControllerAddressIst;
 #endif
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcInit\r\n");
 #ifdef MUSB_C_DYNFIFO_DEF
     pPort->bEndCount = MUSB_C_NUM_EPS;
     pPort->wEndMask =  1;
     pPort->pPrivateData = MUSB_MemAlloc(MUSB_C_NUM_EPS *
                                         sizeof(MGC_EndpointResource));
-    if(pPort->pPrivateData)
+    if (pPort->pPrivateData)
     {
-        if(MUSB_ArrayInit(&(pPort->LocalEnds), sizeof(MGC_EndpointResource),
+        if (MUSB_ArrayInit(&(pPort->LocalEnds), sizeof(MGC_EndpointResource),
                           MUSB_C_NUM_EPS, pPort->pPrivateData))
         {
             /* add endpoint 0 */
@@ -69,7 +71,7 @@ uint8_t MGC_FdrcInit(MGC_Port *pPort)
             MGC_Write8(pBase, MGC_O_FDRC_TXFIFO1, 0);
 
             /* add others, but don't set sizes */
-            for(bEnd = 1; bEnd < (uint8_t)(MUSB_C_NUM_EPS & 0xff); bEnd++)
+            for (bEnd = 1; bEnd < (uint8_t)(MUSB_C_NUM_EPS & 0xff); bEnd++)
             {
                 MUSB_MemSet((void *)&end, 0, sizeof(end));
                 end.bLocalEnd = bEnd;
@@ -98,6 +100,7 @@ void MGC_FdrcDynamicFifoLocation(MGC_Port *pPort,
                                  uint8_t *pbSize83,
                                  uint8_t *pbDoubleBuffered)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_C_DYNFIFO_DEF
     uint8_t bVal;
     MGC_Controller *pImplController = pPort->pController;
@@ -105,16 +108,16 @@ void MGC_FdrcDynamicFifoLocation(MGC_Port *pPort,
     MGC_EndpointResource *pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEnd);
 
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, bEnd);
-    if(bSet)
+    if (bSet)
     {
         /* set new location/size */
         bVal = *pbSize83 << MGC_S_FIFO_SZ;
-        if(*pbDoubleBuffered)
+        if (*pbDoubleBuffered)
         {
             bVal |= MGC_M_FIFO_DPB;
         }
         bVal |= (uint8_t)((*pdwBase >> 11) & 0xf);
-        if(bIsTx)
+        if (bIsTx)
         {
             pEnd->bTxFifoSize = bVal;
             MGC_Write8(pBase, MGC_O_FDRC_TXFIFO2, bVal);
@@ -130,7 +133,7 @@ void MGC_FdrcDynamicFifoLocation(MGC_Port *pPort,
     else
     {
         /* get current location/size */
-        if(bIsTx)
+        if (bIsTx)
         {
             bVal = pEnd->bTxFifoSize;
             *pdwBase = MGC_Read8(pBase, MGC_O_FDRC_TXFIFO1) << 3;
@@ -185,21 +188,22 @@ int MGC_FdrcIsr(void *pParam)
     uint8_t *pBase = (uint8_t *)pControllerImpl->pControllerAddressIst;
     uint8_t bIndex = MGC_Read8(pBase, MGC_O_FDRC_INDEX);
 
-    bIntrUsbValue = MGC_Read8(pBase, MGC_O_FDRC_INTRUSB) & ~(0xc0);
-    wIntrTxValue = MGC_Read16(pBase, MGC_O_FDRC_INTRTX1)
-                   | ( MGC_Read16(pBase, MGC_O_FDRC_INTRTX2) << 8 );
-    wIntrRxValue = MGC_Read16(pBase, MGC_O_FDRC_INTRRX1)
-                   | ( MGC_Read16(pBase, MGC_O_FDRC_INTRRX2) << 8 );
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    /* read registers */
+    bIntrUsbValue = MGC_Read8(pBase, MGC_O_FDRC_INTRUSB);
+    wIntrTxValue = MGC_Read8(pBase, MGC_O_FDRC_INTRTX1) | (MGC_Read8(pBase, MGC_O_FDRC_INTRTX2) << 8);
+    wIntrRxValue = MGC_Read8(pBase, MGC_O_FDRC_INTRRX1) | (MGC_Read8(pBase, MGC_O_FDRC_INTRRX2) << 8);
 
+    /* call common ISR */
     result = MGC_DrcIsr(pControllerImpl, bIntrUsbValue, wIntrTxValue, wIntrRxValue);
 
 #ifdef MUSB_OVERHEAD
     dwTime = pUtils->pfGetTime() - dwStartTime;
-    if(dwTime > pPort->IsrOverhead.dwOverheadMax)
+    if (dwTime > pPort->IsrOverhead.dwOverheadMax)
     {
         pPort->IsrOverhead.dwOverheadMax = dwTime;
     }
-    if(dwTime < pPort->IsrOverhead.dwOverheadMin)
+    if (dwTime < pPort->IsrOverhead.dwOverheadMin)
     {
         pPort->IsrOverhead.dwOverheadMin = dwTime;
     }
@@ -220,6 +224,8 @@ uint32_t MGC_FdrcStart(MGC_Controller *pController)
     uint16_t val;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
     MGC_Port *pPort = pController->pPort;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /*  Set INT enable registers */
     val = 0xffff & pPort->wEndMask;
 
@@ -236,6 +242,10 @@ uint32_t MGC_FdrcStart(MGC_Controller *pController)
     val = (uint16_t)~(MGC_M_INTR_SOF | MGC_M_INTR_VBUSERROR | MGC_M_INTR_SESSREQ);
 #endif
     MGC_Write8(pBase, MGC_O_FDRC_INTRUSBE, (val & 0xff));
+
+    MUSB_DPRINTF("MGC_FdrcStart: MGC_O_FDRC_INTRTX1E = 0x%x\r\n", MGC_Read8(pBase, MGC_O_FDRC_INTRTX1E));
+    MUSB_DPRINTF("MGC_FdrcStart: MGC_O_FDRC_INTRRX1E = 0x%x\r\n", MGC_Read8(pBase, MGC_O_FDRC_INTRRX1E));
+    MUSB_DPRINTF("MGC_FdrcStart: MGC_O_FDRC_INTRUSBE = 0x%x\r\n", MGC_Read8(pBase, MGC_O_FDRC_INTRUSBE));
 
     /* TODO: always set ISOUPDATE in POWER (periph mode) and leave it on! */
     pPort->bOtgState = MUSB_AB_IDLE;
@@ -268,6 +278,7 @@ uint32_t MGC_FdrcStop(MGC_Controller *pController)
     uint8_t temp;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* disable interrupts */
     MGC_Write8(pBase, MGC_O_FDRC_INTRUSBE, 0);
     MGC_Write8(pBase, MGC_O_FDRC_INTRTX1E, 0);
@@ -288,16 +299,17 @@ uint32_t MGC_FdrcStop(MGC_Controller *pController)
 
 uint32_t MGC_FdrcDestroy(MGC_Controller *pController)
 {
-    //MGC_Controllerwrapper成员变量MGC_Controller controllerImpl中
-    //成员指针变量pPort,指向的就是MGC_Controllerwrapper成员变量
-    //MGC_Port portImpl
+    // MGC_Controllerwrapper成员变量MGC_Controller controllerImpl中
+    // 成员指针变量pPort,指向的就是MGC_Controllerwrapper成员变量
+    // MGC_Port portImpl
     MGC_Port *pPort = pController->pPort;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_HostDestroy(pPort);
-    if(pPort->pPrivateData)
+    if (pPort->pPrivateData)
     {
-        //释放结构体MGC_Controllerwrapper成员变量MGC_Port portImpl中
-        //成员指针变量pPrivateData所指向的动态分配的结构体endpoint结构体
+        // 释放结构体MGC_Controllerwrapper成员变量MGC_Port portImpl中
+        // 成员指针变量pPrivateData所指向的动态分配的结构体endpoint结构体
         MUSB_MemFree(pPort->pPrivateData);
         pPort->pPrivateData = NULL;
     }
@@ -314,11 +326,13 @@ uint32_t MGC_FdrcReadBusState(MGC_Port *pPort)
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     /* bConnectorId, bIsSession, bIsHost, bIsLowSpeed */
     devctl = MGC_Read8(pBase, MGC_O_FDRC_DEVCTL);
+	MUSB_DPRINTF("MGC_FdrcReadBusState: devctl = 0x%x\r\n", devctl);
     MGC_DIAG1(3, pController, "DevCtl=", devctl, 16, 2);
-    if(devctl & MGC_M_DEVCTL_SESSION)
+    if (devctl & MGC_M_DEVCTL_SESSION)
     {
         pPort->bConnectorId = (devctl & MGC_M_DEVCTL_BDEVICE) >> 7;
     }
@@ -328,6 +342,7 @@ uint32_t MGC_FdrcReadBusState(MGC_Port *pPort)
     }
     pPort->bIsSession = (devctl & MGC_M_DEVCTL_SESSION) ? TRUE : FALSE;
     pPort->bIsHost = (devctl & MGC_M_DEVCTL_HM) ? TRUE : FALSE;
+	MUSB_DPRINTF("MGC_FdrcReadBusState: bIsHost=%x\r\n", pPort->bIsHost);
     pPort->bIsLowSpeed = (devctl & MGC_M_DEVCTL_LSDEV) ? TRUE : FALSE;
 
     /* bIsSuspend, bIsReset, bIsResume, bIsSession, bBusVoltage */
@@ -378,9 +393,13 @@ uint32_t MGC_FdrcProgramBusState(MGC_Port *pPort)
     uint8_t nDevCtl = devctl;
     uint8_t bFuncAddr = MGC_Read8(pBase, MGC_O_FDRC_FADDR);
 
-    pPort->bWantSession = TRUE; //Modified 201400901
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcProgramBusState: MGC_FdrcProgramBusState = 0x%p, pPort->bWantReset=%d, "
+		    "pPort->bWantSuspend=%d, pPort->bFuncAddr=0x%x\r\n", 
+		    MGC_FdrcProgramBusState, pPort->bWantReset, pPort->bWantSuspend, pPort->bFuncAddr);
+    pPort->bWantSession = TRUE; // Modified 201400901
     /* reset? */
-    if(pPort->bWantReset)
+    if (pPort->bWantReset)
     {
         nPower |= MGC_M_POWER_RESET;
     }
@@ -390,9 +409,9 @@ uint32_t MGC_FdrcProgramBusState(MGC_Port *pPort)
     }
 
     /* suspend? */
-    if(pPort->bWantSuspend)
+    if (pPort->bWantSuspend)
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
             nPower |= MGC_M_POWER_SUSPENDM;
         }
@@ -408,7 +427,7 @@ uint32_t MGC_FdrcProgramBusState(MGC_Port *pPort)
     }
 
     /* session? */
-    if(pPort->bWantSession)
+    if (pPort->bWantSession)
     {
         nDevCtl |= MGC_M_DEVCTL_SESSION;
     }
@@ -418,7 +437,7 @@ uint32_t MGC_FdrcProgramBusState(MGC_Port *pPort)
     }
 
     /* host? */
-    if(pPort->bWantHost)
+    if (pPort->bWantHost)
     {
         nDevCtl |= MGC_M_DEVCTL_HR;
     }
@@ -428,17 +447,17 @@ uint32_t MGC_FdrcProgramBusState(MGC_Port *pPort)
     }
 
     /* make it so, but only on changes */
-    if(pPort->bFuncAddr != bFuncAddr)
+    if (pPort->bFuncAddr != bFuncAddr)
     {
         MUSB_PRT("[MGC] O_FDRC_FADDR:0x%x\r\n",  pPort->bFuncAddr);
         MGC_Write8(pBase, MGC_O_FDRC_FADDR, pPort->bFuncAddr);
     }
-    if(nPower != power)
+    if (nPower != power)
     {
         MUSB_PRT("[MGC] O_FDRC_POWER:0x%x\r\n",  nPower);
         MGC_Write8(pBase, MGC_O_FDRC_POWER, nPower);
     }
-    if(nDevCtl != devctl)
+    if (nDevCtl != devctl)
     {
         MUSB_PRT("[MGC] O_FDRC_DEVCTL:0x%x\r\n",  nDevCtl);
         MGC_Write8(pBase, MGC_O_FDRC_DEVCTL, nDevCtl);
@@ -464,12 +483,16 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcBindEndpoint\r\n");
 #ifdef MUSB_C_DYNFIFO_DEF
     pEnd = MGC_FdrcBindDynamicEndpoint(pPort, pUsbEnd, pRequest, bBind, &bIsTx);
 #else
     pEnd = MGC_DrcBindEndpoint(pPort, pUsbEnd, pRequest, bBind, &bIsTx);
 #endif
-    if(pEnd && bBind)
+    MUSB_DPRINTF("MGC_FdrcBindEndpoint: pEnd = 0x%p, bBind = %d\r\n", pEnd, bBind);
+    MUSB_DPRINTF("MGC_FdrcBindEndpoint: bLocalEnd = %d\r\n", pEnd->bLocalEnd);
+    if (pEnd && bBind)
     {
         /* prepare endpoint registers according to flags */
         bTrafficType = bIsTx ? pEnd->bTrafficType : pEnd->bRxTrafficType;
@@ -479,17 +502,17 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
         /* proto reg */
         reg |= bIsTx ? (pEnd->bBusEnd & MUSB_ENDPOINT_NUMBER_MASK) :
                (pEnd->bRxBusEnd & MUSB_ENDPOINT_NUMBER_MASK);
-        if(bEnd)
+        if (bEnd)
         {
             reg |= bTrafficType << 4;
         }
-        if(bIsTx)
+        if (bIsTx)
         {
             /* transmit */
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* protocol/endpoint/interval/NAKlimit */
-                if(bEnd)
+                if (bEnd)
                 {
                     MGC_Write8(pBase, MGC_O_FDRC_TXTYPE, reg);
                     /*
@@ -501,7 +524,7 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
                     {
                         /* for bulk, use NAK limit and always use some limit */
                         bInterval = MUSB_MIN(pUsbEnd->wNakLimit, 0xff);
-                        if(0xffff == pUsbEnd->wNakLimit)
+                        if (0xffff == pUsbEnd->wNakLimit)
                         {
                             bInterval = 0;
                         }
@@ -515,17 +538,20 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
             }
 
             /* CSR */
-            if(bEnd)
+            if (bEnd)
             {
                 /* packet size */
                 MGC_Write8(pBase, MGC_O_FDRC_TXMAXP, (uint8_t)(pEnd->wPacketSize >> 3));
                 csr2 = MGC_M_TXCSR2_MODE;
-#ifdef MUSB_ISO
-                if(!pPort->bIsHost && (pEnd->bTrafficType == MUSB_ENDPOINT_XFER_ISOC))
+#ifdef MUSB_ISOCH
+                MUSB_DPRINTF("MGC_FdrcBindEndpoint: pPort->bIsHost = %d, bTrafficType = 0x%x\r\n", pPort->bIsHost, pEnd->bTrafficType);
+                if (!pPort->bIsHost && ((pEnd->bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK) == MUSB_ENDPOINT_XFER_ISOCH))
                 {
                     csr2 |= MGC_M_TXCSR2_ISO;
                 }
 #endif
+                MUSB_DPRINTF("MGC_FdrcBindEndpoint: txcsr2 = 0x%x\r\n", csr2);
+                MUSB_DPRINTF("MGC_FdrcBindEndpoint: rxcsr2 = 0x%x\r\n", MGC_Read8(pBase, MGC_O_FDRC_RXCSR2));
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR2, csr2);
                 /* flush twice in case of double packet buffering */
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR1,
@@ -537,10 +563,10 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
         else
         {
             /* receive */
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* protocol/endpoint/interval/NAKlimit */
-                if(bEnd)
+                if (bEnd)
                 {
                     MGC_Write8(pBase, MGC_O_FDRC_RXTYPE, reg);
                     /*
@@ -553,7 +579,7 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
                         /* for bulk, use NAK limit and always use some limit */
                         bInterval = MUSB_MIN(pUsbEnd->wNakLimit, 0xff);
                         //	bInterval = MUSB_MAX(bInterval, 2);
-                        if(0xffff == pUsbEnd->wNakLimit)
+                        if (0xffff == pUsbEnd->wNakLimit)
                         {
                             bInterval = 0;
                         }
@@ -567,21 +593,21 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
             }
 
             /* CSR */
-            if(bEnd)
+            if (bEnd)
             {
                 uint8_t txcsr2;
 
                 csr2 = 0;
                 /* packet size */
                 MGC_Write8(pBase, MGC_O_FDRC_RXMAXP, (uint8_t)(pEnd->wRxPacketSize >> 3));
-                if(pPort->bIsHost)
+                if (pPort->bIsHost)
                 {
                     csr2 = 0;
                 }
                 else
                 {
-#ifdef MUSB_ISO
-                    if ((bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK) == MUSB_ENDPOINT_XFER_ISOC)
+#ifdef MUSB_ISOCH
+                    if ((bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK) == MUSB_ENDPOINT_XFER_ISOCH)
                     {
                         csr2 = MGC_M_RXCSR2_P_ISO;
                     }
@@ -592,7 +618,9 @@ MGC_EndpointResource *MGC_FdrcBindEndpoint(MGC_Port *pPort,
                 txcsr2 = MGC_Read8(pBase, MGC_O_FDRC_TXCSR2);
                 txcsr2 &= (~MGC_M_TXCSR2_MODE);
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR2, txcsr2);/* mode bit=0 for RX */
+                MUSB_DPRINTF("MGC_FdrcBindEndpoint: TXCSR2 = 0x%x\r\n", txcsr2);
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR2, csr2);
+                MUSB_DPRINTF("MGC_FdrcBindEndpoint: RXCSR2 = 0x%x\r\n", csr2);
                 /* twice in case of double packet buffering */
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, MGC_M_RXCSR1_CLRDATATOG);
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, MGC_M_RXCSR1_CLRDATATOG);
@@ -619,24 +647,32 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
     uint8_t bEnd = pEnd->bLocalEnd;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcStartRx\r\n");
     /* select hw ep */
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, bEnd);
+    MUSB_DPRINTF("bEnd=0x%x\r\n", bEnd);
 
     /* clear mode bit in TxCSR2 */
     bCsr2 = MGC_Read8(pBase, MGC_O_FDRC_TXCSR2);
-    if((bCsr2 & MGC_M_TXCSR2_MODE) && pEnd->bIsFifoShared)
+    MUSB_DPRINTF("bCsr2=0x%x\r\n", bCsr2);
+    if ((bCsr2 & MGC_M_TXCSR2_MODE) && pEnd->bIsFifoShared)
     {
         bCsr2  &= ~MGC_M_TXCSR2_MODE;
         MGC_Write8(pBase, MGC_O_FDRC_TXCSR2, bCsr2);
     }
+    MUSB_DPRINTF("MGC_FdrcStartRx: bCsr2 = 0x%x\r\n", bCsr2);
 
     /* read RxCSRs for preparation */
     bCsr1 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
     bCsr2 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR2);
+    MUSB_DPRINTF("bCsr1=0x%x\r\n", bCsr1);
+    MUSB_DPRINTF("bCsr2=0x%x\r\n", bCsr2);
 
     /* prepare for the non-DMA case */
     bCsr2 &= ~(MGC_M_RXCSR2_DMAENAB | MGC_M_RXCSR2_DMAMODE);
-    if(pPort->bIsHost)
+    MUSB_DPRINTF("bIsHost=%d\r\n", pPort->bIsHost);
+    if (pPort->bIsHost)
     {
         bCsr1 |= MGC_M_RXCSR1_H_REQPKT;
         bCsr1 &= ~MGC_M_RXCSR1_RXPKTRDY;
@@ -648,13 +684,14 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     }
     else
     {
-        if (bCsr1 & (~MGC_M_RXCSR1_P_OVERRUN))
+        if (bCsr1 & MGC_M_RXCSR1_P_OVERRUN)
         {
             bCsr1 &= (~MGC_M_RXCSR1_P_OVERRUN);
         }
         if (bCsr1 & MGC_M_RXCSR1_RXPKTRDY)
         {
-            bCsr1 |= MGC_M_RXCSR1_FLUSHFIFO;
+            /*change for card reader by jiangji*/
+        	//bCsr1 |= MGC_M_RXCSR1_FLUSHFIFO;
         }
     }
 
@@ -663,7 +700,9 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     /* disable endpoint interrupt */
     bIntrRxE1 = MGC_Read8(pBase, MGC_O_FDRC_INTRRX1E);
     bIntrRxE2 = MGC_Read8(pBase, MGC_O_FDRC_INTRRX2E);
-    if(bEnd < 8)
+    MUSB_DPRINTF("bIntrRxE1=0x%x\r\n", bIntrRxE1);
+    MUSB_DPRINTF("bIntrRxE2=0x%x\r\n", bIntrRxE2);
+    if (bEnd < 8)
     {
         bIntrRxE1 |= (1 << bEnd);
         MGC_Write8(pBase, MGC_O_FDRC_INTRRX1E, bIntrRxE1 & ~(1 << bEnd));
@@ -674,10 +713,11 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         MGC_Write8(pBase, MGC_O_FDRC_INTRRX2E, bIntrRxE2 & ~(1 << (bEnd - 8)));
     }
 
-    if(!pPort->bIsHost)
+#if 0
+    if (!pPort->bIsHost)
     {
         /* handle residual if any */
-        if(MGC_Read8(pBase, MGC_O_FDRC_RXCSR1) & MGC_M_RXCSR1_RXPKTRDY)
+        if (MGC_Read8(pBase, MGC_O_FDRC_RXCSR1) & MGC_M_RXCSR1_RXPKTRDY)
         {
             uint16_t wRxCount;
             MGC_BsrItem qItem;
@@ -685,31 +725,32 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             MUSB_SystemServices *pServices = pController->pSystemServices;
 
             /* poll until IRP is complete, since handing it to the ISR will always have races */
-            while(TRUE)
+            while (TRUE)
             {
-                if(bCsr1 & MGC_M_RXCSR1_RXPKTRDY)
+                if (bCsr1 & MGC_M_RXCSR1_RXPKTRDY)
                 {
                     wRxCount = MGC_ReadRxCount(pController);
+                    MUSB_DPRINTF("wRxCount=%d\r\n", wRxCount);
                     MUSB_DIAG1(3, "StartRx: residual byte count=", wRxCount, 16, 0);
 #ifdef MUSB_DMA
                     pDmaController = pPort->pDmaController;
                     pDmaChannel = pEnd->pRxDmaChannel;
-                    if(!bAllowDma && pDmaChannel)
+                    if (!bAllowDma && pDmaChannel)
                     {
                         /* release previously-allocated channel */
                         pDmaController->pfDmaReleaseChannel(pDmaChannel);
                         pEnd->pRxDmaChannel = NULL;
                     }
-                    else if(bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
+                    else if (bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
                     {
                         /* candidate for DMA */
-                        if(pDmaController && !pDmaChannel)
+                        if (pDmaController && !pDmaChannel)
                         {
                             pDmaChannel = pEnd->pRxDmaChannel = pDmaController->pfDmaAllocateChannel(
                                                                     pDmaController->pPrivateData, bEnd, FALSE,
                                                                     pEnd->bRxTrafficType, pEnd->wRxPacketSize);
                         }
-                        if(pDmaChannel)
+                        if (pDmaChannel)
                         {
                             pDmaChannel->dwActualLength = 0L;
                             pEnd->bDmaTx = FALSE;
@@ -727,9 +768,9 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
                             bDmaOk = pDmaController->pfDmaProgramChannel(pDmaChannel,
                                      pEnd->wRxPacketSize, 0, pBuffer,
                                      MGC_MIN(wRxCount, pDmaChannel->dwMaxLength));
-                            if(bDmaOk)
+                            if (bDmaOk)
                             {
-                                if(((volatile MGC_EndpointResource *)pEnd)->pRxIrp)
+                                if (((volatile MGC_EndpointResource *)pEnd)->pRxIrp)
                                 {
                                     /* external DMAC; need to assert request line */
                                     bCsr2 = MGC_Read8(pBase, MGC_O_FDRC_TXCSR2);
@@ -756,14 +797,14 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
 
                     /* clear recv condition if necessary */
                     bCsr1 &= ~MGC_M_RXCSR1_RXPKTRDY;
-                    if((wRxCount < pEnd->wRxPacketSize) || !(bCsr2 & MGC_M_RXCSR2_AUTOCLEAR))
+                    if ((wRxCount < pEnd->wRxPacketSize) || !(bCsr2 & MGC_M_RXCSR2_AUTOCLEAR))
                     {
                         MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bCsr1);
                     }
                     /* complete IRP if necessary */
-                    if(bResult)
+                    if (bResult)
                     {
-                        if(MGC_CompleteIrp(&qItem, pEnd, (uint8_t)MUSB_STATUS_OK, FALSE, pIrp))
+                        if (MGC_CompleteIrp(&qItem, pEnd, (uint8_t)MUSB_STATUS_OK, FALSE, pIrp))
                         {
                             pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
                         }
@@ -779,6 +820,7 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             }
         }
     }
+#endif
 
     /* no residual; set current IRP */
     pEnd->pRxIrp = pIrp;
@@ -786,22 +828,22 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
 #ifdef MUSB_DMA
     pDmaController = pPort->pDmaController;
     pDmaChannel = pEnd->pRxDmaChannel;
-    if(!bAllowDma && pDmaChannel)
+    if (!bAllowDma && pDmaChannel)
     {
         /* release previously-allocated channel */
         pDmaController->pfDmaReleaseChannel(pDmaChannel);
         pEnd->pRxDmaChannel = NULL;
     }
-    else if(bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
+    else if (bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
     {
         /* candidate for DMA */
-        if(pDmaController && !pDmaChannel)
+        if (pDmaController && !pDmaChannel)
         {
             pDmaChannel = pEnd->pRxDmaChannel = pDmaController->pfDmaAllocateChannel(
                                                     pDmaController->pPrivateData, bEnd, FALSE,
                                                     pEnd->bRxTrafficType, pEnd->wRxPacketSize);
         }
-        if(pDmaChannel)
+        if (pDmaChannel)
         {
             pEnd->bDmaTx = FALSE;
             pDmaChannel->dwActualLength = 0L;
@@ -809,10 +851,10 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             bDmaOk = pDmaController->pfDmaProgramChannel(pDmaChannel,
                      pEnd->wRxPacketSize, pDmaChannel->bDesiredMode, pBuffer,
                      MGC_MIN(dwTotalBytes, pDmaChannel->dwMaxLength));
-            if(bDmaOk)
+            if (bDmaOk)
             {
                 /* DMA channel is ready; finish RxCSR programming */
-                if(pPort->bIsHost)
+                if (pPort->bIsHost)
                 {
                     bCsr1 &= ~MGC_M_RXCSR1_H_REQPKT;
                     bCsr2 |= MGC_M_RXCSR2_H_AUTOREQ;
@@ -831,13 +873,13 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
 
 #ifdef MUSB_DMA
     /* write RxCSRs */
-    if(pPort->bIsHost)
+    if (pPort->bIsHost)
     {
         MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bCsr1);
     }
     MGC_Write8(pBase, MGC_O_FDRC_RXCSR2, bCsr2);
 
-    if(bAllowDma && pDmaChannel && bDmaOk)
+    if (bAllowDma && pDmaChannel && bDmaOk)
     {
         MGC_DIAG(3, pPort->pController, "StartRx]");
         return 0;
@@ -853,7 +895,7 @@ uint32_t MGC_FdrcStartRx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     MGC_Write8(pBase, MGC_O_FDRC_INTRRX2E, bIntrRxE2);
 
     /* write RxCSRs */
-    if(pPort->bIsHost)
+//    if (pPort->bIsHost)
     {
         MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bCsr1);
     }
@@ -889,10 +931,14 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     MUSB_SystemServices *pServices = pController->pSystemServices;
 #endif
     uint8_t bEnd = pEnd->bLocalEnd;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcStartTx\r\n");
+
     /* select hw ep */
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, bEnd);
 
-    if(pPort->bIsHost && bEnd)
+    if (pPort->bIsHost && bEnd)
     {
         /* host mode; write protocol/endpoint */
         reg = pEnd->bTrafficType << MGC_S_TYPE_PROTO;
@@ -903,7 +949,7 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     /* determine how much to load into FIFO for non-DMA case */
     dwLoadCount = MGC_MIN(pEnd->wPacketSize, dwTotalBytes);
 
-    if(bEnd)
+    if (bEnd)
     {
         /* read CSR for preparation */
         bCsr1 = MGC_Read8(pBase, MGC_O_FDRC_TXCSR1) & ~MGC_M_TXCSR1_P_UNDERRUN;
@@ -916,9 +962,9 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     }
 
 #ifdef MUSB_DMA
-    switch(pEnd->bTrafficType)
+    switch (pEnd->bTrafficType)
     {
-    case MUSB_ENDPOINT_XFER_ISOC:
+    case MUSB_ENDPOINT_XFER_ISOCH:
         pIsochIrp = (MUSB_IsochIrp *)pGenIrp;
         bAllowDma = pIsochIrp->bAllowDma;
         break;
@@ -932,32 +978,32 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     }
     pDmaController = pPort->pDmaController;
     pDmaChannel = pEnd->pDmaChannel;
-    if(!bAllowDma && pDmaChannel)
+    if (!bAllowDma && pDmaChannel)
     {
         /* release previously-allocated channel */
         pDmaController->pfDmaReleaseChannel(pDmaChannel);
         pEnd->pDmaChannel = NULL;
     }
-    else if(bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
+    else if (bAllowDma && pServices->pfSystemToBusAddress(pServices->pPrivateData, pBuffer))
     {
         /* candidate for DMA */
-        if(pDmaController && !pDmaChannel)
+        if (pDmaController && !pDmaChannel)
         {
             pDmaChannel = pEnd->pDmaChannel = pDmaController->pfDmaAllocateChannel(
                                                   pDmaController->pPrivateData, bEnd, TRUE,
                                                   pEnd->bTrafficType, pEnd->wPacketSize);
         }
-        if(pDmaChannel)
+        if (pDmaChannel)
         {
             bDmaOk = pDmaController->pfDmaProgramChannel(pDmaChannel,
                      pEnd->wPacketSize, pDmaChannel->bDesiredMode, pBuffer,
                      MGC_MIN(dwTotalBytes, pDmaChannel->dwMaxLength));
-            if(bDmaOk)
+            if (bDmaOk)
             {
                 pEnd->bDmaTx = TRUE;
                 pDmaChannel->dwActualLength = 0L;
                 dwLoadCount = 0;
-                if(bEnd)
+                if (bEnd)
                 {
                     bCsr2 |= (MGC_M_TXCSR2_AUTOSET | MGC_M_TXCSR2_DMAENAB |
                               (pDmaChannel->bDesiredMode ? MGC_M_TXCSR2_DMAMODE : 0));
@@ -970,14 +1016,15 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             }
         }
     }
-    if(!bDmaOk)
+    if (!bDmaOk)
     {
 #endif
         /* load FIFO */
+        // MGC_FdrcLoadFifo()
         pPort->pfLoadFifo(pPort, pEnd->bLocalEnd, dwLoadCount, pBuffer);
         pEnd->dwTxSize = dwLoadCount;
         /* prepare CSR */
-        if(bEnd)
+        if (bEnd)
         {
             /* since we cannot clear DMAMODE before/during clearing DMAENAB, never clear DMAMODE */
             bCsr2 &= ~(MGC_M_TXCSR2_AUTOSET | MGC_M_TXCSR2_DMAENAB);
@@ -994,7 +1041,7 @@ uint32_t MGC_FdrcStartTx(MGC_Port *pPort, MGC_EndpointResource *pEnd,
 
     /* write CSRs */
     pEnd->pTxIrp = pGenIrp;
-    if(bEnd)
+    if (bEnd)
     {
         MGC_Write8(pBase, MGC_O_FDRC_TXCSR1, bCsr1);
         MGC_Write8(pBase, MGC_O_FDRC_TXCSR2, bCsr2 | MGC_M_TXCSR2_MODE);
@@ -1016,29 +1063,30 @@ uint32_t MGC_FdrcFlushEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
     uint8_t bTx = FALSE;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* select hw ep */
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, pEnd->bLocalEnd);
 
     /* determine TX/RX */
-    if(bDir & MUSB_DIR_IN)
+    if (bDir & MUSB_DIR_IN)
     {
-        if(!pPort->bIsHost)
+        if (!pPort->bIsHost)
         {
             bTx = TRUE;
         }
     }
     else
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
             bTx = TRUE;
         }
     }
 
-    if(bTx)
+    if (bTx)
     {
 #ifdef MUSB_DMA
-        if(pEnd->pDmaChannel && pEnd->bDmaTx)
+        if (pEnd->pDmaChannel && pEnd->bDmaTx)
         {
             pPort->pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
             pEnd->pDmaChannel = NULL;
@@ -1052,9 +1100,9 @@ uint32_t MGC_FdrcFlushEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     }
     else
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
-            if(pEnd->bLocalEnd)
+            if (pEnd->bLocalEnd)
             {
                 bCsr1 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
                 bCsr1 &= ~MGC_M_RXCSR1_H_REQPKT;
@@ -1068,7 +1116,7 @@ uint32_t MGC_FdrcFlushEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
             }
         }
 #ifdef MUSB_DMA
-        if(pEnd->pRxDmaChannel && !pEnd->bDmaTx)
+        if (pEnd->pRxDmaChannel && !pEnd->bDmaTx)
         {
             pPort->pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
             pEnd->pRxDmaChannel = NULL;
@@ -1082,7 +1130,7 @@ uint32_t MGC_FdrcFlushEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     }
 
 #ifdef MUSB_C_DYNFIFO_DEF
-    if(bReuse)
+    if (bReuse)
     {
         pEnd->wMaxPacketSizeTx = pEnd->wMaxPacketSizeRx = 0;
     }
@@ -1100,17 +1148,18 @@ uint32_t MGC_FdrcHaltEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* determine TX/RX */
-    if(bDir & MUSB_DIR_IN)
+    if (bDir & MUSB_DIR_IN)
     {
-        if(!pPort->bIsHost)
+        if (!pPort->bIsHost)
         {
             bTx = TRUE;
         }
     }
     else
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
             bTx = TRUE;
         }
@@ -1118,17 +1167,17 @@ uint32_t MGC_FdrcHaltEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
 
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, pEnd->bLocalEnd);
 
-    if(bTx)
+    if (bTx)
     {
         /* Tx */
         val = MGC_Read8(pBase, MGC_O_FDRC_TXCSR1);
-        if(bHalt)
+        if (bHalt)
         {
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* mark for stopping */
                 pEnd->bStopTx = TRUE;
-                if(!pEnd->pTxIrp)
+                if (!pEnd->pTxIrp)
                 {
                     /* if already stopped, indicate it */
                     pEnd->bIsHalted = TRUE;
@@ -1142,7 +1191,7 @@ uint32_t MGC_FdrcHaltEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         }
         else
         {
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* restart Tx traffic */
                 pEnd->bIsHalted = FALSE;
@@ -1162,9 +1211,9 @@ uint32_t MGC_FdrcHaltEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
     {
         /* Rx */
         val = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
-        if(bHalt)
+        if (bHalt)
         {
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* stop Rx traffic */
                 pEnd->bIsRxHalted = TRUE;
@@ -1180,15 +1229,15 @@ uint32_t MGC_FdrcHaltEndpoint(MGC_Port *pPort, MGC_EndpointResource *pEnd,
         }
         else
         {
-            if(pPort->bIsHost)
+            if (pPort->bIsHost)
             {
                 /* restart Rx traffic */
                 pEnd->bIsRxHalted = FALSE;
-                if(pEnd->pRxIrp)
+                if (pEnd->pRxIrp)
                 {
                     /* restart pending IRP */
 #ifdef MUSB_DMA
-                    if(pEnd->pRxDmaChannel && !pEnd->bDmaTx)
+                    if (pEnd->pRxDmaChannel && !pEnd->bDmaTx)
                     {
                         val2 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR2);
                         MGC_Write8(pBase, MGC_O_FDRC_RXCSR2,
@@ -1232,19 +1281,20 @@ uint32_t MGC_FdrcDefaultEndResponse(MGC_Port *pPort, uint8_t bStall)
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, 0);
     bCsrVal = MGC_Read8(pBase, MGC_O_FDRC_CSR0);
 
-    if(bCsrVal & MGC_M_CSR0_P_SETUPEND)
+    if (bCsrVal & MGC_M_CSR0_P_SETUPEND)
     {
         bVal |= MGC_M_CSR0_P_SVDSETUPEND;
     }
     /* prepare stall response if required */
-    if(bStall)
+    if (bStall)
     {
         bVal |= MGC_M_CSR0_P_SENDSTALL;
     }
-    else if(pPort->wSetupDataSize)
+    else if (pPort->wSetupDataSize)
     {
         /* we need to transmit; ack RxPktRdy BEFORE loading FIFO */
         MGC_Write8(pBase, MGC_O_FDRC_CSR0, bVal);
@@ -1254,7 +1304,7 @@ uint32_t MGC_FdrcDefaultEndResponse(MGC_Port *pPort, uint8_t bStall)
         MGC_FdrcLoadFifo(pPort, 0, wSize, pPort->pSetupData);
         pPort->wSetupDataIndex = wSize;
         bVal |= MGC_M_CSR0_TXPKTRDY;
-        if(wSize == pPort->wSetupDataSize)
+        if (wSize == pPort->wSetupDataSize)
         {
             bVal |= MGC_M_CSR0_P_DATAEND;
             pPort->bEnd0Status = TRUE;
@@ -1292,40 +1342,39 @@ uint8_t MGC_FdrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem)
     uint8_t status = MUSB_STATUS_OK;
     uint8_t *pBase = (uint8_t *)pPort->pController->pControllerAddressIsr;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, 0);
     wCsrVal = MGC_Read8(pBase, MGC_O_FDRC_CSR0);
     wCount = MGC_Read8(pBase, MGC_O_FDRC_COUNT0);
     MGC_DIAG1(3, pPort->pController, "CSR0=", wCsrVal, 16, 2);
     MGC_DIAG1(3, pPort->pController, "Count0=", wCount, 16, 2);
 
-    MUSB_NPRT("endpoint 0 isr handle:wCsrVal=%x,wcount=%x,pPort->bIsHost=%x\r\n",
-              wCsrVal,
-              wCount,
-              pPort->bIsHost);
-    if(pPort->bIsHost)
+    MUSB_DPRINTF("MGC_FdrcServiceDefaultEnd: endpoint 0 isr handle: wCsrVal=0x%x, wcount=0x%x, pPort->bIsHost=0x%x\r\n",
+               wCsrVal, wCount, pPort->bIsHost);
+    if (pPort->bIsHost)
     {
-        if(wCsrVal & MGC_M_CSR0_H_RXSTALL)
+        if (wCsrVal & MGC_M_CSR0_H_RXSTALL)
         {
             MGC_DIAG(2, pPort->pController, "End 0 stall\n");
             status = MUSB_STATUS_STALLED;
             bError = TRUE;
         }
-        else if(wCsrVal & MGC_M_CSR0_H_ERROR)
+        else if (wCsrVal & MGC_M_CSR0_H_ERROR)
         {
             MGC_DIAG(2, pPort->pController, "end 0: no response (error)\n");
             status = MUSB_STATUS_NACK_LIMIT;
             bError = TRUE;
         }
-        else if(wCsrVal & MGC_M_CSR0_H_NAKTIMEOUT)
+        else if (wCsrVal & MGC_M_CSR0_H_NAKTIMEOUT)
         {
             MGC_DIAG(2, pPort->pController, "end 0: no response (NAK timeout)\n");
             status = MUSB_STATUS_NACK_LIMIT;
             bError = TRUE;
         }
-        if(MUSB_STATUS_NACK_LIMIT == status)
+        if (MUSB_STATUS_NACK_LIMIT == status)
         {
             /* use the proper sequence to abort the transfer */
-            if(wCsrVal & MGC_M_CSR0_H_REQPKT)
+            if (wCsrVal & MGC_M_CSR0_H_REQPKT)
             {
                 wCsrVal &= ~MGC_M_CSR0_H_REQPKT;
                 MGC_Write8(pBase, MGC_O_FDRC_CSR0, (uint8_t)wCsrVal);
@@ -1342,19 +1391,19 @@ uint8_t MGC_FdrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem)
             }
         }
 
-        if(bError)
+        if (bError)
         {
             /* clear it */
             MGC_Write8(pBase, MGC_O_FDRC_CSR0, 0);
         }
     }//device
-    else if(wCsrVal & MGC_M_CSR0_P_SENTSTALL)
+    else if (wCsrVal & MGC_M_CSR0_P_SENTSTALL)
     {
         bError = TRUE;
         wCsrVal &= ~MGC_M_CSR0_P_SENTSTALL;
         MGC_Write8(pBase, MGC_O_FDRC_CSR0, (uint8_t)wCsrVal);
     }
-    else if(wCsrVal & MGC_M_CSR0_P_SETUPEND)
+    else if (wCsrVal & MGC_M_CSR0_P_SETUPEND)
     {
         pPort->wSetupDataIndex = 0;
         pPort->wSetupDataSize = 0;
@@ -1362,14 +1411,15 @@ uint8_t MGC_FdrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem)
         pPort->dwResponseTimeoutCount++;
 #endif
     }
-    else if(!wCount && pPort->bEnd0Status)
+    else if (!wCount && pPort->bEnd0Status)
     {
         /* this is the "acknowledge" interrupt */
         pPort->bEnd0Status = FALSE;
         MGC_Write8(pBase, MGC_O_FDRC_CSR0, (uint8_t)0);
 
         /* set address if required */
-        if(pPort->bSetAddress)
+        MUSB_DPRINTF("MGC_FdrcServiceDefaultEnd: pPort->bSetAddress = 0x%x\r\n", pPort->bSetAddress);
+        if (pPort->bSetAddress)
         {
             MGC_FdrcProgramBusState(pPort);
             pPort->bSetAddress = FALSE;
@@ -1377,11 +1427,12 @@ uint8_t MGC_FdrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem)
         return FALSE;
     }
 
-    if(bError)
+    MUSB_DPRINTF("MGC_FdrcServiceDefaultEnd: bError = 0x%x\r\n", bError);
+    if (bError)
     {
-        if(pPort->bIsHost)
+        if (pPort->bIsHost)
         {
-            if(MGC_CompleteIrp(pItem, pEnd, status, TRUE, pEnd->pTxIrp))
+            if (MGC_CompleteIrp(pItem, pEnd, status, TRUE, pEnd->pTxIrp))
             {
                 bResult = TRUE;
             }
@@ -1394,7 +1445,7 @@ uint8_t MGC_FdrcServiceDefaultEnd(MGC_Port *pPort, MGC_BsrItem *pItem)
         /* call common logic */
         bResult = MGC_DrcServiceDefaultEnd(pPort, pItem, &wCsrVal, wCount);
         /* write CSR0 if needed */
-        if(wCsrVal)
+        if (wCsrVal)
         {
             MGC_Write8(pBase, MGC_O_FDRC_CSR0, (uint8_t)wCsrVal);
             MUSB_PRT("Setting CSR0 to 0x%x\r\n", wCsrVal);
@@ -1420,6 +1471,7 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pItem->bStatus = MUSB_STATUS_OK;
     pItem->bCause = MGC_BSR_CAUSE_NONE;
 
@@ -1430,19 +1482,19 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
             wEndIndex);
     do
     {
-        if(pPort->bIsHost)//host
+        if (pPort->bIsHost)//host
         {
             /* check for TX error */
-            if(bVal & MGC_M_TXCSR1_H_ERROR)
+            if (bVal & MGC_M_TXCSR1_H_ERROR)
             {
                 status = MUSB_STATUS_TRANSMIT_ERROR;
             }
             /* check for stall */
-            if(bVal & MGC_M_TXCSR1_H_RXSTALL)
+            if (bVal & MGC_M_TXCSR1_H_RXSTALL)
             {
                 status = MUSB_STATUS_STALLED;
             }
-            if(status)//出错
+            if (status)//出错
             {
                 /* reset error bits */
                 bVal &= ~(MGC_M_TXCSR1_H_ERROR | MGC_M_TXCSR1_H_RXSTALL);
@@ -1450,7 +1502,7 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR1, bVal);
                 bResult = MGC_CompleteIrp(pItem, pEnd, (uint8_t)status, TRUE, pEnd->pTxIrp);
                 /* start next IRP if any */
-                if(pEnd->bStopTx)
+                if (pEnd->bStopTx)
                 {
                     pEnd->bIsHalted = TRUE;
                 }
@@ -1458,12 +1510,12 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
             }
             else
             {
-                if(pEnd)
+                if (pEnd)
                 {
 #ifdef MUSB_DMA
-                    if(pEnd->pDmaChannel)
+                    if (pEnd->pDmaChannel)
                     {
-                        if(MUSB_DMA_STATUS_FREE ==
+                        if (MUSB_DMA_STATUS_FREE ==
                                 pPort->pDmaController->pfDmaGetChannelStatus(pEnd->pDmaChannel))
                         {
                             pEnd->dwTxOffset = pEnd->pDmaChannel->dwActualLength;
@@ -1480,10 +1532,10 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
                     status = MUSB_STATUS_INTERNAL_ERROR;
                 }
             }
-            if(bResult)
+            if (bResult)
             {
 #ifdef MUSB_DMA
-                if(pEnd->pDmaChannel)
+                if (pEnd->pDmaChannel)
                 {
                     pPort->pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
                     pEnd->pDmaChannel = NULL;
@@ -1496,7 +1548,7 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
 
                 MGC_CompleteIrp(pItem, pEnd, (uint8_t)status, TRUE, pEnd->pTxIrp);
                 /* start next IRP if any */
-                if(pEnd->bStopTx)
+                if (pEnd->bStopTx)
                 {
                     pEnd->bIsHalted = TRUE;
                 }
@@ -1506,24 +1558,24 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
         {
             /* Function role */
 
-            if(bVal & MGC_M_TXCSR1_P_SENTSTALL)
+            if (bVal & MGC_M_TXCSR1_P_SENTSTALL)
             {
                 bVal &= ~MGC_M_TXCSR1_P_SENTSTALL;
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR1, bVal);
                 break;
             }
-            if(bVal & MGC_M_TXCSR1_P_UNDERRUN)
+            if (bVal & MGC_M_TXCSR1_P_UNDERRUN)
             {
                 bVal &= ~MGC_M_TXCSR1_P_UNDERRUN;
                 MGC_Write8(pBase, MGC_O_FDRC_TXCSR1, bVal);
             }
 
-            if(pEnd)
+            if (pEnd)
             {
 #ifdef MUSB_DMA
-                if(pEnd->pDmaChannel)
+                if (pEnd->pDmaChannel)
                 {
-                    if(MUSB_DMA_STATUS_FREE ==
+                    if (MUSB_DMA_STATUS_FREE ==
                             pPort->pDmaController->pfDmaGetChannelStatus(pEnd->pDmaChannel))
                     {
                         pEnd->dwTxOffset = pEnd->pDmaChannel->dwActualLength;
@@ -1531,14 +1583,16 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
                 }
                 else
 #endif
+                {
                     pEnd->dwTxOffset += pEnd->dwTxSize;
-                if(pEnd->pTxIrp)
+                }
+                if (pEnd->pTxIrp)
                 {
                     bResult = MGC_PipeTransmitReady(pPort, pEnd);
-                    if(bResult)
+                    if (bResult)
                     {
 #ifdef MUSB_DMA
-                        if(pEnd->pDmaChannel)
+                        if (pEnd->pDmaChannel)
                         {
                             pPort->pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
                             pEnd->pDmaChannel = NULL;
@@ -1554,7 +1608,7 @@ uint8_t MGC_FdrcServiceTransmitAvail(MGC_Port *pPort, uint16_t wEndIndex,
             }
         }
     }
-    while(FALSE);
+    while (FALSE);
 
     return bResult;
 }
@@ -1574,22 +1628,24 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
     MGC_Controller *pController = pPort->pController;
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcServiceReceiveReady\r\n");
     pItem->bStatus = MUSB_STATUS_OK;
     pItem->bCause = MGC_BSR_CAUSE_NONE;
 
     /* select end */
     MGC_Write8(pBase, MGC_O_FDRC_INDEX, (uint8_t)wEndIndex);
+    wRxCount = MGC_ReadRxCount(pController);
     bVal = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
     bVal2 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR2);
 
-    pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds),
-            wEndIndex);
+    pEnd = (MGC_EndpointResource*)MUSB_ArrayFetch(&(pPort->LocalEnds), wEndIndex);
     do
     {
-        if(pPort->bIsHost)//host
+        if (pPort->bIsHost)//host
         {
             /* check for RX error */
-            if(bVal & (MGC_M_RXCSR1_H_ERROR | MGC_M_RXCSR1_DATAERR))
+            if (bVal & (MGC_M_RXCSR1_H_ERROR | MGC_M_RXCSR1_DATAERR))
             {
                 status = MUSB_STATUS_RECEIVE_ERROR;
                 /* do the proper sequence to abort the transfer */
@@ -1597,20 +1653,20 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bVal);
             }
             /* check for stall */
-            if(bVal & MGC_M_RXCSR1_H_RXSTALL)
+            if (bVal & MGC_M_RXCSR1_H_RXSTALL)
             {
                 status = MUSB_STATUS_STALLED;
                 /* avoid a race with next StartRx by clearing ReqPkt */
                 bVal &= ~MGC_M_RXCSR1_H_REQPKT;
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bVal);
-                MUSB_PRT(" stall condition\r\n");
+                MUSB_DPRINTF(" stall condition\r\n");
             }
             /* be sure a packet is ready for unloading */
-            if(!status && !(bVal & MGC_M_RXCSR1_RXPKTRDY))
+            if (!status && !(bVal & MGC_M_RXCSR1_RXPKTRDY))
             {
                 status = MUSB_STATUS_INTERNAL_ERROR;
             }
-            if(status)
+            if (status)
             {
                 /* reset error bits */
                 /* TODO: don't know if middle one will work; docs inconsistent */
@@ -1621,26 +1677,26 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
             }
             else
             {
-                if(pEnd && pEnd->pRxIrp)
+                if (pEnd && pEnd->pRxIrp)
                 {
                     /* we are expecting traffic */
 #ifdef MUSB_DMA
-                    if(pEnd->pRxDmaChannel)
+                    if (pEnd->pRxDmaChannel)
                     {
-                        if(MUSB_DMA_STATUS_FREE ==
+                        if (MUSB_DMA_STATUS_FREE ==
                                 pPort->pDmaController->pfDmaGetChannelStatus(pEnd->pRxDmaChannel))
                         {
                             pEnd->dwRxOffset = pEnd->pRxDmaChannel->dwActualLength;
                         }
                     }
 #endif
-                    wRxCount = MGC_ReadRxCount(pController);
+//                    wRxCount = MGC_ReadRxCount(pController);
                     bResult = MGC_PipePacketReceived(pPort, status, pEnd, wRxCount,
                                                      TRUE, pEnd->pRxIrp);
-                    if(bResult)
+                    if (bResult)
                     {
 #ifdef MUSB_DMA
-                        if(pEnd->pRxDmaChannel)
+                        if (pEnd->pRxDmaChannel)
                         {
                             pPort->pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
                             pEnd->pRxDmaChannel = NULL;
@@ -1660,13 +1716,13 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
                     status = MUSB_STATUS_INTERNAL_ERROR;
                 }
             }
-        }//end host
-        else//device
+        }   // end host
+        else    // device
         {
             /*
             *  PERIPHERAL RX ( HOST OUT )
             */
-            if((bVal & MGC_M_RXCSR1_P_SENTSTALL) ||
+            if ((bVal & MGC_M_RXCSR1_P_SENTSTALL) ||
                     !(bVal & MGC_M_RXCSR1_RXPKTRDY))
             {
                 bVal &= ~MGC_M_RXCSR1_P_SENTSTALL;
@@ -1676,41 +1732,41 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
             /*
             *  Fresh packet received
             */
-            if(!pEnd || pEnd->bIsHalted)
+            if (!pEnd || pEnd->bIsHalted)
             {
                 /* couldn't find endpoint or it is halted */
                 status = pEnd ? 0 : MUSB_STATUS_INTERNAL_ERROR;
                 MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, MGC_M_RXCSR1_P_SENDSTALL);
                 break;
             }
-            if(pEnd && pEnd->pRxIrp)
+            if (pEnd && pEnd->pRxIrp)
             {
                 /* we are expecting traffic */
-                while(pEnd->pRxIrp &&
+                while (pEnd->pRxIrp &&
                         ((pEnd->bBsrResidual != pEnd->bIsrResidual) || (bVal & MGC_M_RXCSR1_RXPKTRDY)))
                 {
-                    if(pEnd->bBsrResidual != pEnd->bIsrResidual)
+                    if (pEnd->bBsrResidual != pEnd->bIsrResidual)
                     {
                         pEnd->bBsrResidual++;
                     }
 #ifdef MUSB_DMA
                     /* if we were using DMA, update actual byte count */
-                    if(pEnd->pRxDmaChannel)
+                    if (pEnd->pRxDmaChannel)
                     {
-                        if(MUSB_DMA_STATUS_FREE ==
+                        if (MUSB_DMA_STATUS_FREE ==
                                 pPort->pDmaController->pfDmaGetChannelStatus(pEnd->pRxDmaChannel))
                         {
                             pEnd->dwRxOffset = pEnd->pRxDmaChannel->dwActualLength;
                             pEnd->bDmaResidual = FALSE;
                         }
                     }
-                    if(pEnd->bDmaResidual)
+                    if (pEnd->bDmaResidual)
                     {
                         return FALSE;
                     }
 #endif
                     /* read FIFO count and see if current IRP is satisfied */
-                    wRxCount = MGC_ReadRxCount(pController);
+//                    wRxCount = MGC_ReadRxCount(pController);
                     bResult = MGC_PipePacketReceived(pPort, status, pEnd, wRxCount,
                                                      FALSE, pEnd->pRxIrp);
                     /* re-read CSR */
@@ -1726,11 +1782,11 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
                         bVal = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
                     }
 
-                    if(bResult)
+                    if (bResult)
                     {
                         /* current IRP is satisfied */
 #ifdef MUSB_DMA
-                        if(pEnd->pRxDmaChannel)
+                        if (pEnd->pRxDmaChannel)
                         {
                             pPort->pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
                             pEnd->pRxDmaChannel = NULL;
@@ -1750,7 +1806,7 @@ uint8_t MGC_FdrcServiceReceiveReady(MGC_Port *pPort, uint16_t wEndIndex,
             }
         }   /* END: PERIPHERAL RX ( HOST OUT )  */
     }
-    while(FALSE);
+    while (FALSE);
     return bResult;
 }
 
@@ -1769,19 +1825,21 @@ uint8_t MGC_FdrcLoadFifo(MGC_Port *pPort, uint8_t bEnd, uint32_t dwCount, const 
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
     uint8_t bFifoOffset = MGC_FIFO_OFFSET(bEnd);
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_FDRC_AHB
+    MUSB_DPRINTF("%s: pSource = 0x%p, dwCount = %d\r\n", __FUNCTION__, pSource, dwCount);
     /* doublewords when possible */
-    for(dwIndex = dwIndex32 = 0; dwIndex32 < dwCount32; dwIndex32++, dwIndex += 4)
+    for (dwIndex = dwIndex32 = 0; dwIndex32 < dwCount32; dwIndex32++, dwIndex += 4)
     {
         MGC_Write32(pBase, bFifoOffset, *((uint32_t *) & (pSource[dwIndex])));
     }
-    while(dwIndex < dwCount)
+    while (dwIndex < dwCount)
     {
         MGC_Write8(pBase, bFifoOffset, pSource[dwIndex++]);
     }
 #else
     /* 8-bit only */
-    for(dwIndex = 0; dwIndex < dwCount; dwIndex++)
+    for (dwIndex = 0; dwIndex < dwCount; dwIndex++)
     {
         MGC_Write8(pBase, bFifoOffset, pSource[dwIndex]);
     }
@@ -1805,19 +1863,23 @@ uint8_t MGC_FdrcUnloadFifo(MGC_Port *pPort, uint8_t bEnd, uint32_t dwCount, uint
     uint8_t *pBase = (uint8_t *)pController->pControllerAddressIst;
     uint8_t bFifoOffset = MGC_FIFO_OFFSET(bEnd);
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FdrcUnloadFifo\r\n");
+    MUSB_DPRINTF("pDest=0x%p, dwCount=%d\r\n", pDest, dwCount);
 #ifdef MUSB_FDRC_AHB
     /* doublewords when possible */
-    for(dwIndex = dwIndex32 = 0; dwIndex32 < dwCount32; dwIndex32++, dwIndex += 4)
+    for (dwIndex = dwIndex32 = 0; dwIndex32 < dwCount32; dwIndex32++, dwIndex += 4)
     {
         *((uint32_t *) & (pDest[dwIndex])) = MGC_Read32(pBase, bFifoOffset);
     }
-    while(dwIndex < dwCount)
+    while (dwIndex < dwCount)
     {
         pDest[dwIndex++] = MGC_Read8(pBase, bFifoOffset);
     }
+    MUSB_DPRINTF("%x %x %x %x\r\n", pDest[0], pDest[1], pDest[2], pDest[3]);
 #else
     /* 8-bit only */
-    for(dwIndex = 0; dwIndex < dwCount; dwIndex++)
+    for (dwIndex = 0; dwIndex < dwCount; dwIndex++)
     {
         pDest[dwIndex] = MGC_Read8(pBase, bFifoOffset);
     }
@@ -1845,16 +1907,16 @@ uint8_t MGC_FdrcDmaChannelStatusChanged(
 
     pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds),
             bLocalEnd);
-    if((bTransmit && !pEnd->pDmaChannel) || (!bTransmit && !pEnd->pRxDmaChannel))
+    if ((bTransmit && !pEnd->pDmaChannel) || (!bTransmit && !pEnd->pRxDmaChannel))
     {
         return FALSE;
     }
 
     /* TODO: something more specific might be better */
-    if(bTransmit)
+    if (bTransmit)
     {
         bQueue = MGC_FdrcServiceTransmitAvail(pPort, bLocalEnd, &qItem);
-        if(bQueue)
+        if (bQueue)
         {
 #ifdef MUSB_OVERHEAD
             qItem.dwTime = pController->pUtils->pfGetTime();
@@ -1871,16 +1933,16 @@ uint8_t MGC_FdrcDmaChannelStatusChanged(
         bCsr1 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR1);
         bCsr2 = MGC_Read8(pBase, MGC_O_FDRC_RXCSR2);
         /* update actual byte count */
-        if(pEnd->pRxDmaChannel)
+        if (pEnd->pRxDmaChannel)
         {
-            if(MUSB_DMA_STATUS_FREE ==
+            if (MUSB_DMA_STATUS_FREE ==
                     pPort->pDmaController->pfDmaGetChannelStatus(pEnd->pRxDmaChannel))
             {
                 pEnd->dwRxOffset = pEnd->pRxDmaChannel->dwActualLength;
                 pEnd->bDmaResidual = FALSE;
             }
         }
-        if(pEnd->bDmaResidual)
+        if (pEnd->bDmaResidual)
         {
             return FALSE;
         }
@@ -1889,15 +1951,15 @@ uint8_t MGC_FdrcDmaChannelStatusChanged(
         bQueue = MGC_PipePacketReceived(pPort, status, pEnd, wRxCount,
                                         FALSE, pEnd->pRxIrp);
         /* clear recv condition if necessary */
-        if((wRxCount < pEnd->wRxPacketSize) || !(bCsr2 & MGC_M_RXCSR2_AUTOCLEAR))
+        if ((wRxCount < pEnd->wRxPacketSize) || !(bCsr2 & MGC_M_RXCSR2_AUTOCLEAR))
         {
             bCsr1 &= ~MGC_M_RXCSR1_RXPKTRDY;
             MGC_Write8(pBase, MGC_O_FDRC_RXCSR1, bCsr1);
         }
-        if(bQueue)
+        if (bQueue)
         {
             /* current IRP is satisfied */
-            if(pEnd->pRxDmaChannel)
+            if (pEnd->pRxDmaChannel)
             {
                 pPort->pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
                 pEnd->pRxDmaChannel = NULL;
@@ -1910,7 +1972,7 @@ uint8_t MGC_FdrcDmaChannelStatusChanged(
             /* enable endpoint interrupt */
             bIntrRxE1 = MGC_Read8(pBase, MGC_O_FDRC_INTRRX1E);
             bIntrRxE2 = MGC_Read8(pBase, MGC_O_FDRC_INTRRX2E);
-            if(bLocalEnd < 8)
+            if (bLocalEnd < 8)
             {
                 MGC_Write8(pBase, MGC_O_FDRC_INTRRX1E, bIntrRxE1 | (1 << bLocalEnd));
             }
@@ -1934,6 +1996,7 @@ uint8_t MGC_FdrcDmaChannelStatusChanged(
     return bQueue;
 
 #else
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     return FALSE;
 

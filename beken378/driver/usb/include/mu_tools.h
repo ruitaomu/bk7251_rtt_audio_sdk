@@ -31,7 +31,7 @@
 #ifdef GNU
 #include <stdint.h>
 #else
-#include "stdint.h"
+#include "mu_stdint.h"
 #endif
 
 #ifdef COMPILER_NO_CONST
@@ -47,7 +47,7 @@
 #endif
 
 #ifndef NULL
-#define NULL                     (0L)
+#define NULL                     ((void*)0)
 #endif
 
 /*
@@ -81,5 +81,4 @@
 #endif	/* Microsoft compiler */
 
 #endif	/* multiple inclusion protection */
-// eof
 

@@ -1724,8 +1724,8 @@ static void Ps_Command(char *pcWriteBuffer, int xWriteBufferLen, int argc, char 
     UINT32 dtim_data_wait_time = 0;
     UINT32 dtim_uart_wait_time = 0;
 	PS_DEEP_CTRL_PARAM deep_sleep_param;
-	deep_sleep_param.gpio_index_map = gpio_index;
-	deep_sleep_param.gpio_edge_map  = dtim;
+	deep_sleep_param.gpio_index_lo_map = gpio_index;
+	deep_sleep_param.gpio_edge_lo_map  = dtim;
 	deep_sleep_param.deep_wkway = PS_DEEP_WAKEUP_GPIO;
 	
     if(argc < 3)

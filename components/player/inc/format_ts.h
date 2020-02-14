@@ -1,6 +1,12 @@
-#ifndef FORMAT_TS_H__
-#define FORMAT_TS_H__
+/*
+ * File: format_ts.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
+ */
 
-struct audio_codec *format_ts_create(struct audio_stream* stream);
+#ifndef __FORMAT_TS_H__
+#define __FORMAT_TS_H__
 
-#endif /* FORMAT_TS_H__ */
+int player_format_ts_register(void);
+
+#endif /* __FORMAT_TS_H__ */

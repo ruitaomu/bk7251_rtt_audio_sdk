@@ -2,7 +2,7 @@ Import('RTT_ROOT')
 Import('rtconfig')
 from building import *
 
-src = Glob('*.c')
+src  = Glob('*.c')
 src += Glob('./real/*.c')
 
 SrcRemove(src, 'polyphase.c')
@@ -14,12 +14,12 @@ if rtconfig.PLATFORM == 'gcc':
     src += ['./real/arm/asmmisc_gcc.s', './real/arm/asmpoly_thumb2_gcc.s']
 
 cwd = GetCurrentDir()
-CPPPATH = [cwd + '/pub']
+CPPPATH = [cwd, cwd + '/pub']
 
-src = Glob('*.x')
+src = Glob('*.c')
 libs  = ['helix_mp3_arm968_gcc']
 libpath  = [cwd]
 
-group = DefineGroup('helix_mp3', src, depend = [''], CPPPATH = CPPPATH, LIBS = libs, LIBPATH = libpath)
+group = DefineGroup('helix_mp3', src, depend = ['PKG_USING_PLAYER'], CPPPATH = CPPPATH, LIBS = libs, LIBPATH = libpath)
 
 Return('group')

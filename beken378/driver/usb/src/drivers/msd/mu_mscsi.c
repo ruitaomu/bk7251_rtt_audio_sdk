@@ -157,6 +157,7 @@ static MGC_MsdCmdSet MGC_ScsiCmdSet =
 /****************************** FUNCTIONS ********************************/
 MGC_MsdCmdSet *MGC_GetScsiCmdSet()
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return &MGC_ScsiCmdSet;
 }
 
@@ -164,16 +165,23 @@ static void *MGC_ScsiCmdSetCreateInstance(uint8_t bLunCount)
 {
     MGC_ScsiCmdSetData *pScsi = (MGC_ScsiCmdSetData *)MUSB_MemAlloc(
                                     sizeof(MGC_ScsiCmdSetData));
-    if(pScsi)
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pScsi)
     {
         MUSB_MemSet(pScsi, 0, sizeof(MGC_ScsiCmdSetData));
         pScsi->bLunCount = bLunCount;
+    }
+    else
+    {
+		MUSB_ERR_PRINTF("MGC_ScsiCmdSetCreateInstance: MUSB_MemAlloc failed\r\n");
     }
     return pScsi;
 }
 
 static void MGC_ScsiCmdSetDestroyInstance(void *pInstance)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_MemFree(pInstance);
 }
 
@@ -205,6 +213,8 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
     MGC_MsdProtocol *pProtocol = pScsi->pProtocol;
     uint8_t bLun = pScsi->bLun;
     uint8_t bRet = 0;
+
+    MUSB_DPRINTF1("MGC_ScsiCmdComplete\r\n");
     /* prepare for next command */
     MUSB_MemSet(pScsi->aCmd, 0, 16);
 
@@ -239,17 +249,19 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
      * - it just goes on and on, with different repeats of the READ_CAPACITY and READ(10)
      */
 
-    if(pScsi->bError)
+    if (pScsi->bError)
     {
         pScsi->bError = FALSE;
-        if(!bWrapperStatus)
+        if (!bWrapperStatus)
         {
             /* analyze sense codes */
-            if(MGC_SCSI_SC_NOT_READY == (pScsi->aSenseData[2] & 0xf) &&
+            MUSB_DPRINTF("pScsi->aSenseData[2] = %d\r\n", pScsi->aSenseData[2]);
+            MUSB_DPRINTF("pScsi->aSenseData[12] = %d\r\n", pScsi->aSenseData[12]);
+            if (MGC_SCSI_SC_NOT_READY == (pScsi->aSenseData[2] & 0xf) &&
                     (MGC_SCSI_ASC_UNIT_NOT_READY == pScsi->aSenseData[12]))
             {
                 pScsi->bRemovable = TRUE;
-                if(2 == pScsi->aSenseData[13])
+                if (2 == pScsi->aSenseData[13])
                 {
                     /* needs a start unit */
                     bCmdLength = 6;
@@ -261,12 +273,12 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
                     bAnnounce = TRUE;
                 }
             }
-            else if(MGC_SCSI_SC_UNIT_ATTENTION == (pScsi->aSenseData[2] & 0xf) &&
+            else if (MGC_SCSI_SC_UNIT_ATTENTION == (pScsi->aSenseData[2] & 0xf) &&
                     (MGC_SCSI_ASC_MEDIUM_CHANGE == pScsi->aSenseData[12]))
             {
                 bMediumChange = TRUE;
             }
-            else if(MGC_SCSI_SC_UNIT_ATTENTION == (pScsi->aSenseData[2] & 0xf) &&
+            else if (MGC_SCSI_SC_UNIT_ATTENTION == (pScsi->aSenseData[2] & 0xf) &&
                     ((MGC_SCSI_ASC_MEDIUM_NOT_PRESENT == pScsi->aSenseData[12]) ||
                      (MGC_SCSI_ASC_MEDIUM_ERROR == pScsi->aSenseData[12])))
             {
@@ -274,13 +286,13 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             }
         }
     }
-    if(bWrapperStatus)
+    if (bWrapperStatus)
     {
         /* command failed: find out why */
         pScsi->bError = TRUE;
 
         /* if the device failed a read, circumvent the retry loop */
-        if(pScsi->bState == MGC_SCSI_STATE_READ_BLOCK0)
+        if (pScsi->bState == MGC_SCSI_STATE_READ_BLOCK0)
         {
             pScsi->dwCapacityRetries = MGC_MSD_CAPACITY_RETRIES;
         }
@@ -299,10 +311,10 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
     }
 
     /* process result of last action and setup next one */
-    switch(pScsi->bState)
+    switch (pScsi->bState)
     {
     case MGC_SCSI_STATE_INQUIRY:
-        MUSB_PRT("******SCSI_0x12 Standard Inquiry complete***\r\n\r\n");
+        MUSB_DPRINTF("******SCSI_0x12 cmd complete***\r\n");
 
         /* read format capacity */
         bCmdLength = 10;
@@ -311,7 +323,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         dwLength = sizeof(pScsi->aFormatCapacityData);
         pScsi->bState = MGC_SCSI_STATE_READ_FMT_CAPACITY;
         /* KLUDGE for certain devices */
-        if(pScsi->bLunScan)
+        if (pScsi->bLunScan)
         {
             bLun = pScsi->bLunIndex;
         }
@@ -321,7 +333,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         MUSB_PRT("MSD: Read Format Capacity complete\r\n");
 
         /* if error, re-zero data for check later */
-        if(bError || bUsbError)
+        if (bError || bUsbError)
         {
             MUSB_DIAG_STRING(2, "MSD: Read Format Capacity failed");
             MUSB_MemSet(pScsi->aFormatCapacityData, 0,
@@ -329,7 +341,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             pScsi->bError = FALSE;
         }
         /* retry this command if needed, up to given count */
-        if((bError || bUsbError) && (pScsi->bFmtCapacityRetries < MGC_MSD_FMT_CAPACITY_RETRIES))
+        if ((bError || bUsbError) && (pScsi->bFmtCapacityRetries < MGC_MSD_FMT_CAPACITY_RETRIES))
         {
             pScsi->bFmtCapacityRetries++;
             /* read format capacity again */
@@ -339,7 +351,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             dwLength = sizeof(pScsi->aFormatCapacityData);
             pScsi->bState = MGC_SCSI_STATE_READ_FMT_CAPACITY;
         }
-        else if(pScsi->bLunScan)
+        else if (pScsi->bLunScan)
         {
             /* KLUDGE for certain devices: do INQUIRY/READ_FMT_CAP on each LUN, then back to LUN 0 */
             pScsi->bState = MGC_SCSI_STATE_INQUIRY;
@@ -347,7 +359,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             bOpcode = MGC_SCSI_INQUIRY;
             pBuffer = pScsi->aInquiryData;
             dwLength = 36;
-            if(pScsi->bLunIndex < (pScsi->bLunCount - 1))
+            if (pScsi->bLunIndex < (pScsi->bLunCount - 1))
             {
                 bLun = ++pScsi->bLunIndex;
             }
@@ -371,13 +383,13 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         MUSB_PRT("MSD: Read Capacity complete\r\n");
 
         /* if error, re-zero data for check later */
-        if(bError || bUsbError)
+        if (bError || bUsbError)
         {
             MUSB_DIAG_STRING(2, "MSD: Read Capacity failed");
             MUSB_MemSet(pScsi->aCapacityData, 0,
                         sizeof(pScsi->aCapacityData));
         }
-        if(bMediumChange)
+        if (bMediumChange)
         {
             /* if medium changed, re-read capacity */
             bCmdLength = 16;
@@ -386,7 +398,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             dwLength = sizeof(pScsi->aCapacityData);
             pScsi->bState = MGC_SCSI_STATE_READ_CAPACITY;
         }
-        else if(pScsi->bNoMedium || bUsbError)
+        else if (pScsi->bNoMedium || bUsbError)
         {
             /* skip read if definitive no-medium or stall from device */
             bCmdLength = 6;
@@ -403,11 +415,17 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         break;
 
     case MGC_SCSI_STATE_FIRST_TEST:
-        MUSB_PRT("[SCSI]bError=%d,bUsbError=%dr\n", bError, bUsbError);
-        if(bError || bUsbError)
+        MUSB_DPRINTF("MGC_SCSI_STATE_FIRST_TEST\r\n");
+        MUSB_DPRINTF("bError = %d, bUsbError = %d\r\n", bError, bUsbError);
+        MUSB_DPRINTF("pScsi->aCapacityData[0] = 0x%x\r\n", pScsi->aCapacityData[0]);
+        MUSB_DPRINTF("pScsi->aCapacityData[1] = 0x%x\r\n", pScsi->aCapacityData[1]);
+        MUSB_DPRINTF("pScsi->aCapacityData[2] = 0x%x\r\n", pScsi->aCapacityData[2]);
+        MUSB_DPRINTF("pScsi->aCapacityData[3] = 0x%x\r\n", pScsi->aCapacityData[3]);
+		MUSB_DPRINTF("#############bError=%d,bUsbError=%d##################\r\n",bError,bUsbError);
+        if (bError || bUsbError)
         {
             /* retry if needed */
-            if(pScsi->dwRetries < MGC_MSD_SCSI_TEST_UNIT_RETRIES)
+            if (pScsi->dwRetries < MGC_MSD_SCSI_TEST_UNIT_RETRIES)
             {
                 pScsi->dwRetries++;
                 pScsi->bState = MGC_SCSI_STATE_FIRST_TEST;
@@ -421,7 +439,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
             bCmdLength = 6;
             bOpcode = MGC_SCSI_TEST_UNIT_READY;
         }
-        else if(pScsi->aCapacityData[0] || pScsi->aCapacityData[1] ||
+        else if (pScsi->aCapacityData[0] || pScsi->aCapacityData[1] ||
                 pScsi->aCapacityData[2] || pScsi->aCapacityData[3])
         {
             ///此处表示已U盘已经成功可以读取
@@ -448,11 +466,11 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
 
     case MGC_SCSI_STATE_READ_BLOCK0:
         MUSB_PRT("MSD: Read block 0 complete\r\n");
-        if(bError)
+        if (bError)
         {
             pScsi->bRemovable = TRUE;
         }
-        else if((pScsi->dwCapacityRetries < MGC_MSD_CAPACITY_RETRIES) &&
+        else if ((pScsi->dwCapacityRetries < MGC_MSD_CAPACITY_RETRIES) &&
                 !pScsi->aCapacityData[0] && !pScsi->aCapacityData[1] &&
                 !pScsi->aCapacityData[2] && !pScsi->aCapacityData[3])
         {
@@ -472,14 +490,17 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         break;
 
     case MGC_SCSI_STATE_TEST_UNIT_READY:
+        MUSB_DPRINTF("MGC_SCSI_STATE_TEST_UNIT_READY\r\n");
+        MUSB_DPRINTF("bError = %d, pScsi->dwRetries = %d\r\n",
+                  bError, pScsi->dwRetries);
         MUSB_PRT("MSD: Test Unit Ready complete\r\n");
         /* if ready, done; otherwise try again */
-        if(!bError)
+        if (!bError)
         {
             bAnnounce = TRUE;
             bReady = pScsi->bNoMedium ? FALSE : TRUE;
         }
-        else if(pScsi->dwRetries > MGC_MSD_SCSI_TEST_UNIT_RETRIES)
+        else if (pScsi->dwRetries > MGC_MSD_SCSI_TEST_UNIT_RETRIES)
         {
             /* retries exhausted; assume removable medium */
             pScsi->dwRetries = 0;
@@ -520,7 +541,7 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
 
     /* set common fields */
     pScsi->aCmd[0] = bOpcode;
-    switch(bCmdLength)
+    switch (bCmdLength)
     {
     case 6:
         pScsi->aCmd[4] = (uint8_t)(dwLength & 0xff);
@@ -530,13 +551,14 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         break;
     }
 
-    if(bAnnounce)
+    MUSB_DPRINTF("MGC_ScsiCmdComplete: bAnnounce=%d\r\n", bAnnounce);
+    if (bAnnounce)
     {
         /* ready to announce volume */
 
         /* fill DeviceInfo */
         MUSB_MemSet(&DeviceInfo, 0, sizeof(DeviceInfo));
-        switch(pScsi->aInquiryData[0] & 0x1f)
+        switch (pScsi->aInquiryData[0] & 0x1f)
         {
         case MGC_SCSI_DEVICE_TYPE_DIRECT:
         case MGC_SCSI_DEVICE_TYPE_RBC:
@@ -581,37 +603,37 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
                                  ((uint32_t)pScsi->aCapacityData[5] << 16) | ((uint32_t)pScsi->aCapacityData[6] << 8) |
                                  pScsi->aCapacityData[7];
 
-        if(!DeviceInfo.dwBlockSize)
+        if (!DeviceInfo.dwBlockSize)
         {
             DeviceInfo.dwBlockSize = ((uint32_t)pScsi->aFormatCapacityData[10] << 8) |
                                      pScsi->aFormatCapacityData[11];
         }
 
-        if(!DeviceInfo.dwBlockSize)
+        if (!DeviceInfo.dwBlockSize)
         {
             DeviceInfo.dwBlockSize = 512;
         }
         else
         {
-            if(DeviceInfo.dwBlockSize != 512)
+            if (DeviceInfo.dwBlockSize != 512)
                 bRet = 1;
         }
         /* generate awDiskVendor, awDiskProduct, awDiskRevision */
         pInquiry = (const MGC_MsdStandardInquiryData *)pScsi->aInquiryData;
         bCount = (uint8_t)MUSB_MIN(MUSB_HFI_MAX_DISK_VENDOR, 8);
-        for(bIndex = 0; bIndex < bCount; bIndex++)
+        for (bIndex = 0; bIndex < bCount; bIndex++)
         {
             DeviceInfo.awDiskVendor[bIndex] = pInquiry->aVid[bIndex];
         }
         DeviceInfo.awDiskVendor[bIndex] = 0;
         bCount = (uint8_t)MUSB_MIN(MUSB_HFI_MAX_DISK_PRODUCT, 16);
-        for(bIndex = 0; bIndex < bCount; bIndex++)
+        for (bIndex = 0; bIndex < bCount; bIndex++)
         {
             DeviceInfo.awDiskProduct[bIndex] = pInquiry->aPid[bIndex];
         }
         DeviceInfo.awDiskProduct[bIndex] = 0;
         bCount = (uint8_t)MUSB_MIN(MUSB_HFI_MAX_DISK_REVISION, 4);
-        for(bIndex = 0; bIndex < bCount; bIndex++)
+        for (bIndex = 0; bIndex < bCount; bIndex++)
         {
             DeviceInfo.awDiskRevision[bIndex] = pInquiry->aRevision[bIndex];
         }
@@ -622,12 +644,12 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
                        ((uint32_t)pScsi->aCapacityData[1] << 16) |
                        ((uint32_t)pScsi->aCapacityData[2] << 8) |
                        pScsi->aCapacityData[3];
-        if(!dwBlockCount)
+        if (!dwBlockCount)
         {
             bReady = FALSE;
         }
 
-        if(bReady)
+        if (bReady)
         {
             /* fill InitialMedium if medium is present */
             DeviceInfo.InitialMedium.AccessType = AccessType;
@@ -638,27 +660,28 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         }
 
         /* set device info */
+	    // MGC_BotProtocolSetDeviceInfo()
         pScsi->pProtocol->pfSetDeviceInfo(pScsi->pProtocol->pProtocolData,
                                           pScsi->bLun, &DeviceInfo);
 
-        if(pScsi->bRemovable && bReady)
+        if (pScsi->bRemovable && bReady)
         {
-            MUSB_PRT("pfsetmedium info\r\n");
+            MUSB_DPRINTF("pfsetmedium info\r\n");
             /* prepare & set medium info */
             MediumInfo.AccessType = AccessType;
             MediumInfo.dwBlockSize = DeviceInfo.dwBlockSize;
             MediumInfo.dwBlockCountLo = dwBlockCount;
             MediumInfo.dwBlockCountHi = 0;
             MediumInfo.awSerialNumber[0] = 0;
-
+		    // MGC_BotProtocolSetMediumInfo()
             pScsi->pProtocol->pfSetMediumInfo(pScsi->pProtocol->pProtocolData,
                                               pScsi->bLun, &MediumInfo);
         }
 
-        if(pScsi->bAnnounced)
+        if (pScsi->bAnnounced)
         {
             /* if already announced, we are updating medium status */
-            MUSB_PRT("pfsetready0--\r\n");
+			MUSB_DPRINTF("pfSetReady--0--\r\n");
             pScsi->pProtocol->pfSetReady(pScsi->pProtocol->pProtocolData,
                                          pScsi->bLun, bReady);
         }
@@ -666,10 +689,10 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         {
             /* not yet announced and all LUNs discovered, so announce all of them now */
             pScsi->bAnnounced = TRUE;
-            MUSB_PRT("pfsetready1--\r\n");
+		    MUSB_DPRINTF("pfSetReady--1--\r\n");
             for (bLun = 0; bLun < pScsi->bLunCount; bLun++)
             {
-                /*MGC_BotProtocolSetReady()*/
+			    // MGC_BotProtocolSetReady()
                 pScsi->pProtocol->pfSetReady(pScsi->pProtocol->pProtocolData, bLun, TRUE);
             }
 
@@ -677,23 +700,27 @@ uint32_t MGC_ScsiCmdComplete(void *pPrivateData,
         }
         else
         {
-            MUSB_PRT("NO pfsetready--\r\n");
+			MUSB_DPRINTF("NO pfSetReady--\r\n");
             pScsi->bAnnounced = TRUE; /* for each LUN < LunCount-1 mark as announced but do it only together with the last LUN */
         }
     }
     else
     {
-        if(bOpcode == MGC_SCSI_READ10)
-            MUSB_PRT("cmd 28, dwLength=%d\r\n", dwLength);
-        else
-            MUSB_PRT("\r\nsend scsi cmd : %x\r\n", bOpcode);
-
+        if (bOpcode == MGC_SCSI_READ10)
+        {
+			MUSB_DPRINTF("cmd 28, dwLength=%d\r\n",dwLength);
+        }
+		else
+        {
+			MUSB_DPRINTF("send scsi cmd : %x\r\n",bOpcode);
+        }
         /* not announcing yet; send next command */
+		// MGC_BotProtocolSendCmd()
         bSuccess = pProtocol->pfSendCmd(pProtocol->pProtocolData, pScsi, bLun,
                                         pScsi->aCmd, bCmdLength, pBuffer, dwLength, bSend,
                                         MGC_ScsiCmdComplete, FALSE, 2);
 
-        if(!bSuccess)
+        if (!bSuccess)
         {
             MUSB_DIAG_STRING(1, "MSD/SCSI: Protocol SendCmd failed");
         }
@@ -711,6 +738,7 @@ static uint8_t MGC_ScsiCmdSetDiscoverDevice(void *pInstance,
 {
     MGC_ScsiCmdSetData *pScsi = (MGC_ScsiCmdSetData *)pInstance;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pScsi->pProtocol = pProtocol;
     pScsi->bLun = bLun;
 
@@ -722,7 +750,7 @@ static uint8_t MGC_ScsiCmdSetDiscoverDevice(void *pInstance,
     pScsi->bAnnounced = FALSE;
     pScsi->bNoMedium = FALSE;
 
-    MUSB_PRT("send cmd 0x12\r\n");
+    MUSB_DPRINTF("send cmd 0x12\r\n");
     /* start things by sending INQUIRY command */
     pScsi->bState = MGC_SCSI_STATE_INQUIRY;
     MUSB_MemSet(pScsi->aCmd, 0, 16);
@@ -730,7 +758,7 @@ static uint8_t MGC_ScsiCmdSetDiscoverDevice(void *pInstance,
     pScsi->aCmd[4] = 36;
 
     /* special handling for multi-LUN devices */
-    if(!bLun && (pScsi->bLunCount > 1))
+    if (!bLun && (pScsi->bLunCount > 1))
     {
         pScsi->bLunScan = TRUE;
         pScsi->bLunIndex = 0;
@@ -739,7 +767,7 @@ static uint8_t MGC_ScsiCmdSetDiscoverDevice(void *pInstance,
     {
         pScsi->bLunScan = FALSE;
     }
-    //即函数MGC_BotProtocolSendCmd()
+    // 即函数MGC_BotProtocolSendCmd()
     return pProtocol->pfSendCmd(pProtocol->pProtocolData, pScsi, bLun,
                                 pScsi->aCmd, 6,
                                 pScsi->aInquiryData, 36,
@@ -759,8 +787,9 @@ static uint8_t MGC_ScsiCmdSetMountDevice(void *pInstance,
     MGC_ScsiCmdSetData *pScsi = (MGC_ScsiCmdSetData *)pInstance;
     MGC_MsdStandardInquiryData *pInquiryData = (MGC_MsdStandardInquiryData *)pScsi->aInquiryData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* prevent medium removal to the maximum extent possible */
-    if(pInquiryData->bRmb & MGC_M_MSD_INQUIRY_RMB)
+    if (pInquiryData->bRmb & MGC_M_MSD_INQUIRY_RMB)
     {
         pScsi->pfMountComplete = pfMountComplete;
         pScsi->pMountCompleteParam = pPrivateData;
@@ -784,6 +813,7 @@ static uint8_t MGC_ScsiCmdSetUnmountDevice(void *pInstance,
 {
     MGC_ScsiCmdSetData *pScsi = (MGC_ScsiCmdSetData *)pInstance;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* allow medium removal */
     pScsi->bState = MGC_SCSI_STATE_ALLOW_MEDIUM_REMOVE;
     MUSB_MemSet(pScsi->aCmd, 0, 16);
@@ -803,6 +833,7 @@ static uint8_t MGC_ScsiCmdSetGetReadCmd(void *pInstance,
 {
     uint8_t bIndex = 0;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* only use Read10, so only low 32-bits of block */
     pCmdBuffer[bIndex++] = MGC_SCSI_READ10;
     pCmdBuffer[bIndex++] = 0;
@@ -829,6 +860,7 @@ static uint8_t MGC_ScsiCmdSetGetWriteCmd(void *pInstance,
 {
     uint8_t bIndex = 0;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* only use Write10, so only low 32-bits of block */
     pCmdBuffer[bIndex++] = MGC_SCSI_WRITE10;
     pCmdBuffer[bIndex++] = 0;
@@ -850,6 +882,7 @@ static uint8_t MGC_ScsiCmdSetFlushDevice(void *pInstance,
 {
     /*MGC_ScsiCmdSetData* pScsi = (MGC_ScsiCmdSetData*)pInstance;*/
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: sync cache command, but it wants a range of blocks! */
     return TRUE;
 }
@@ -861,6 +894,7 @@ static uint8_t MGC_ScsiCmdSetFormatDevice(void *pInstance,
 {
     /*MGC_ScsiCmdSetData* pScsi = (MGC_ScsiCmdSetData*)pInstance;*/
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: mode select to set block size, then format unit */
     return TRUE;
 }
@@ -871,6 +905,7 @@ static uint8_t MGC_ScsiCmdSetAbortFormat(void *pInstance,
 {
     /*MGC_ScsiCmdSetData* pScsi = (MGC_ScsiCmdSetData*)pInstance;*/
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO */
     return TRUE;
 }
@@ -881,6 +916,7 @@ static void MGC_ScsiCmdSetParseInterrupt(void *pInstance,
         uint16_t wMessageLength,
         uint8_t bLun)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: only relevant if CBI added in the future */
 }
 
@@ -890,6 +926,7 @@ static uint8_t MGC_ScsiCmdSetCheckMedium(void *pInstance,
 {
     MGC_ScsiCmdSetData *pScsi = (MGC_ScsiCmdSetData *)pInstance;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* clear retry counters etc. */
     pScsi->dwRetries = 0;
     pScsi->dwCapacityRetries = 0;
@@ -909,4 +946,4 @@ static uint8_t MGC_ScsiCmdSetCheckMedium(void *pInstance,
                                 FALSE, 0);
 }
 #endif // CFG_SUPPORT_MSD
-// eof
+

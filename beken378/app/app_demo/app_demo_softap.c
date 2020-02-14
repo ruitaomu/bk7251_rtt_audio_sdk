@@ -54,7 +54,7 @@ typedef enum
     APS_APP_OTA_DONE,
 } DEMO_SOFTAP_STATUS;
 
-typedef struct temp_message 
+typedef struct drone_message 
 {
     u32 dmsg;
     u32 data;

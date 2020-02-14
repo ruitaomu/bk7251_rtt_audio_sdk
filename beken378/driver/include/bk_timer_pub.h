@@ -4,6 +4,8 @@
 
 #define TIMER_DEV_NAME                "bk_timer"
 
+#define BK_TIMER_FAILURE                (1)
+#define BK_TIMER_SUCCESS                (0)
 
 #define TIMER_CMD_MAGIC              (0xe340000)
 enum
@@ -13,7 +15,16 @@ enum
     CMD_TIMER_INIT_PARAM
 };
 
-
+enum
+{
+    BKTIMER0     = 0,
+    BKTIMER1,
+    BKTIMER2,
+    BKTIMER3,
+    BKTIMER4,
+    BKTIMER5,
+    BKTIMER_COUNT
+};
 
 typedef void (*TFUNC)(UINT8);
 

@@ -354,8 +354,23 @@ typedef struct
 {
     uint8_t bPage;
     uint8_t bLength;
-    uint8_t aData[1];
+    uint8_t aData[18];
 } MGC_MsdModePage;
+
+/**
+ * MGC_MsdModeParamHeader6.
+ * Mode parameter header (6-byte version)
+ * @field bDataLength length of data following itself
+ * @field bMediumType medium type (0 for RBC)
+ * @field bDeviceSpecific device-specific parameter (0 for RBC)
+ * @field bBlockDescLength block descriptor length (0 for RBC)
+ */
+typedef struct
+{
+    MGC_MsdModeParamHeader6 sModeParam;
+    MGC_MsdModePage sModePage;
+} MGC_MsdScsiModeSenseData;
+
 #include "mu_pkoff.h"
 
 /** Parameters saveable (in bPage) */

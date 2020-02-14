@@ -949,6 +949,7 @@ static rt_err_t rt_serial_control(struct rt_device *dev,
                 if (pconfig->bufsz != serial->config.bufsz && serial->parent.ref_count)
                 {
                     /*can not change buffer size*/
+                    rt_kprintf("can not change buffer size, must be 2048\r\n");
                     return RT_EBUSY;
                 }
                 /* set serial configure */

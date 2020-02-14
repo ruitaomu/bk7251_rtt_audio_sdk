@@ -5,6 +5,8 @@
 #include "sys_ctrl_pub.h"
 #include "target_util_pub.h"
 #include "rtconfig.h"
+#include "icu_pub.h"
+#include "mcu_ps_pub.h"
 
 #if PS_SUPPORT_MANUAL_SLEEP
 /** @brief  Request power save,and wakeup some time later
@@ -207,86 +209,116 @@ void power_save_wakeup_with_gpio(UINT32 gpio_index)
 
 #endif
 
+
+int bk_unconditional_normal_sleep(UINT32 sleep_ms)
+{
+    UINT32  sleep_pwm_t, param, uart_miss_us = 0, miss_ticks = 0;
+    UINT32 wkup_type, wastage = 0;
+
+    rt_enter_critical();
+    
+    GLOBAL_INT_DECLARATION();
+    GLOBAL_INT_DISABLE();
+
+    {
+        do
+        {
+            if(sleep_ms <= 2)
+            {
+                break;
+            }
+            sleep_ms = sleep_ms - FCLK_DURATION_MS;
+
+            sleep_pwm_t = (sleep_ms * 32);
+            if((int32)sleep_pwm_t <= 64)
+            {
+                break;
+            }
+#if (CFG_SOC_NAME == SOC_BK7231)
+            if(sleep_pwm_t > 65535)
+                sleep_pwm_t = 65535;
+            else
+#endif
+            if(sleep_pwm_t < 64)
+                sleep_pwm_t = 64;
+            
+            mcu_ps_machw_cal();
+            rt_kprintf("s:%d\r\n",rt_tick_get());
+            {
+            
+#if (CHIP_U_MCU_WKUP_USE_TIMER && (CFG_SOC_NAME != SOC_BK7231))
+                ps_timer3_enable(sleep_pwm_t);
+#else
+                ps_pwm_suspend_tick(sleep_pwm_t);
+#endif
+            }
+
+#if (CHIP_U_MCU_WKUP_USE_TIMER && (CFG_SOC_NAME != SOC_BK7231))
+            param = (0xfffff & (~PWD_TIMER_32K_CLK_BIT) & (~PWD_UART2_CLK_BIT)
+                     & (~PWD_UART1_CLK_BIT)
+                    );
+#else
+            param = (0xfffff & (~PWD_MCU_WAKE_PWM_BIT) & (~PWD_UART2_CLK_BIT)
+                     & (~PWD_UART1_CLK_BIT)
+                    );
+#endif
+        if(sctrl_unconditional_normal_sleep(param) != 0)
+            {
+            ps_timer3_disable();
+            GLOBAL_INT_RESTORE();
+            rt_exit_critical();
+            return -1;
+        }
+#if (CHIP_U_MCU_WKUP_USE_TIMER && (CFG_SOC_NAME != SOC_BK7231))
+            ps_timer3_measure_prepare();
+#endif
+            wkup_type = sctrl_unconditional_normal_wakeup();
+
+
+#if (CHIP_U_MCU_WKUP_USE_TIMER && (CFG_SOC_NAME != SOC_BK7231))
+            if(1 == wkup_type)
+            {
+                ps_timer3_disable(); 
+            }
+
+            mcu_ps_machw_cal();
+#else
+
+            {
+                if(1 == wkup_type)
+                {
+                    wastage = 24;
+                }
+
+                if(ps_pwm_int_status())
+                {
+                    miss_ticks = (sleep_pwm_t + (uart_miss_us >> 5) + wastage) / (FCLK_DURATION_MS * 32);
+                }
+                else
+                {
+                    {
+                        miss_ticks = ((uart_miss_us >> 5) + wastage) / (FCLK_DURATION_MS * 32);
+                    }
+                }
+
+                miss_ticks += FCLK_DURATION_MS;//for early wkup
+            }
+            ps_pwm_resume_tick();
+
+#endif
+        }
+        while(0);
+    }
+
+    GLOBAL_INT_RESTORE();
+    rt_kprintf("t:%d\r\n",rt_tick_get());
+    rt_exit_critical();
+    
+    return 0;
+}
+
+
 #if CFG_USE_DEEP_PS
-
-/*
- *  deep sleep
- *
- */
-void deep_sleep_wakeup_with_timer(UINT32 sleep_time)
-{
-    UINT32 reg;
-    PS_DEEP_CTRL_PARAM deep_param;
-
-    if(power_save_ps_mode_get() != PS_NO_PS_MODE)
-    {
-        os_printf("can't pwm ps,ps in mode %d!\r\n", power_save_ps_mode_get());
-        return ;
-    }
-
-
-    if(sleep_time != 0xffffffff)
-    {
-        os_printf("sleep with rtc,%d ms\r\n", sleep_time);
-        deep_param.sleep_time= ((sleep_time * 102400) / 3125) ;
-
-        if(deep_param.sleep_time > 0xffff) //only 16 bit
-            deep_param.sleep_time = 0xffff;
-        else if(deep_param.sleep_time < 32)
-            deep_param.sleep_time = 32;
-    }
-    else
-    {
-        os_printf("sleep forever\r\n");
-        deep_param.sleep_time = 0xffffffff;
-    }
-
-    deep_param.wake_up_way = PS_DEEP_WAKEUP_RTC;
-    os_printf("enter rtc ps\r\n");
-    GLOBAL_INT_DECLARATION();
-    GLOBAL_INT_DISABLE();
-    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_RTOS_DEEP_SLEEP, &deep_param);
-    delay(5);
-    GLOBAL_INT_RESTORE();
-    os_printf("exit pwm ps\r\n");
-}
-
-
-/** @brief  Request deep sleep,and wakeup by gpio.
- *          First user must set gpio to GMODE_INPUT,GMODE_INPUT_PULLUP,
- *          or GMODE_INPUT_PULLDOWN,as required.
- *
- *  @param  gpio_index_map:The gpio bitmap which set 1 enable wakeup deep sleep.
- *              gpio_index_map is hex and every bits is map to gpio0-gpio31.
- *          gpio_edge_map:The gpio edge bitmap for wakeup gpios,
- *              gpio_edge_map is hex and every bits is map to gpio0-gpio31.
- *              0:rising,1:falling.
- */
-void deep_sleep_wakeup_with_gpio(UINT32 gpio_index_map,UINT32 gpio_edge_map)
-{
-    UINT64 reg, param;
-    PS_DEEP_CTRL_PARAM deep_param;
-    UINT64 i;
-
-    if(power_save_ps_mode_get() != PS_NO_PS_MODE)
-    {
-        BK_DEEP_SLEEP_PRT("can't gpio ps,ps in mode %d!\r\n", power_save_ps_mode_get());
-        return ;
-    }
-
-    BK_DEEP_SLEEP_PRT("enter deep with gpio ps %x %x\r\n",gpio_index_map,gpio_edge_map);
-
-    GLOBAL_INT_DECLARATION();
-    GLOBAL_INT_DISABLE();
-    deep_param.wake_up_way = PS_DEEP_WAKEUP_GPIO;
-    deep_param.gpio_index_map = gpio_index_map;
-    deep_param.gpio_edge_map= gpio_edge_map;
-    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_RTOS_DEEP_SLEEP, &deep_param);
-    delay(5);
-    GLOBAL_INT_RESTORE();
-    os_printf("exit gpio ps\r\n");
-}
-
 void bk_enter_deep_sleep_mode(PS_DEEP_CTRL_PARAM *deep_param)
 {
     UINT32 param;
@@ -299,25 +331,23 @@ void bk_enter_deep_sleep_mode(PS_DEEP_CTRL_PARAM *deep_param)
         return ;
     }
 
-	if((deep_param->wake_up_way == PS_DEEP_WAKEUP_GPIO) || (deep_param->wake_up_way & PS_DEEP_WAKEUP_GPIO_RTC))
+	if((deep_param->wake_up_way & PS_DEEP_WAKEUP_GPIO))
 	{
-		if(deep_param->gpio_index_map)
+		if(deep_param->gpio_index_lo_map)
 		{
-			rt_kprintf("---enter deep sleep :wake up with gpio 0~31 ps: 0x%x 0x%x \r\n",
-			deep_param->gpio_index_map,deep_param->gpio_edge_map);
+			os_printf("---enter deep sleep :wake up with gpio 0~31 ps: 0x%x 0x%x \r\n",
+			deep_param->gpio_index_lo_map,deep_param->gpio_edge_lo_map);
 		}
 		
-		if(deep_param->gpio_last_index_map )
+		if(deep_param->gpio_index_hi_map )
 		{
-			rt_kprintf("---enter deep sleep :wake up with gpio32~39 ps: 0x%x 0x%x \r\n",
-			deep_param->gpio_last_index_map,deep_param->gpio_last_edge_map);
+			os_printf("---enter deep sleep :wake up with gpio32~39 ps: 0x%x 0x%x \r\n",
+			deep_param->gpio_index_hi_map,deep_param->gpio_edge_hi_map);
 		}		
 	}
 	
-	if((deep_param->wake_up_way == PS_DEEP_WAKEUP_RTC) || (deep_param->wake_up_way & PS_DEEP_WAKEUP_GPIO_RTC))
-	{
-		rt_kprintf("---enter deep sleep :wake up with xtal 32k ps :%d s\r\n",deep_param->sleep_time);
-		
+	if((deep_param->wake_up_way & PS_DEEP_WAKEUP_RTC))
+	{        
 		if(deep_param->sleep_time> 0x1ffff)
 		{
 			deep_param->sleep_time = 0x1ffff;		

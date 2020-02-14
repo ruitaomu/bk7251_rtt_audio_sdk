@@ -17,7 +17,7 @@ static SDD_OPERATIONS bk_timer_op =
 
 void (*p_TIMER_Int_Handler[TIMER_CHANNEL_NO])(UINT8) = {NULL,};
 
-UINT32 bk_timer_cal_endvalue(UINT32 ucChannel, UINT32 time, UINT32 div)
+UINT32 bk_timer_cal_endvalue(UINT32 ucChannel, UINT32 time_ms, UINT32 div)
 {
     UINT64 value;
 
@@ -27,12 +27,12 @@ UINT32 bk_timer_cal_endvalue(UINT32 ucChannel, UINT32 time, UINT32 div)
     if(ucChannel < 3)
     {
         /*26m clock*/
-        value = time * 26000 / div;
+        value = time_ms * 26000 / div;
     }
     else
     {
          /*32k clock*/
-        value = time * 32 / div;
+        value = time_ms * 32 / div;
     }
 
     if(value > 0xffffffff)
@@ -161,6 +161,17 @@ UINT32 bk_timer_ctrl(UINT32 cmd, void *param)
 
 void bk_timer_init(void)
 {
+    UINT32 value;
+
+    value = REG_READ(TIMER0_2_CTL);
+    value &= ~(0x7 );
+    value &= ~(0x7 << TIMERCTLB_INT_POSI);
+    REG_WRITE(TIMER0_2_CTL, value);
+    value = REG_READ(TIMER3_5_CTL);
+    value &= ~(0x7);
+    value &= ~(0x7 << TIMERCTLB_INT_POSI);
+    REG_WRITE(TIMER3_5_CTL, value);
+    
     intc_service_register(IRQ_TIMER, PRI_IRQ_TIMER, bk_timer_isr);
     sddev_register_dev(TIMER_DEV_NAME, &bk_timer_op);
 }
@@ -189,7 +200,7 @@ void bk_timer_isr(void)
 
     do
     {
-        REG_WRITE(TIMER0_2_CTL, status);
+        REG_WRITE(TIMER0_2_CTL, REG_READ(TIMER0_2_CTL) & (~(0x7 << TIMERCTLA_INT_POSI)) | status);
     }
     while(REG_READ(TIMER0_2_CTL) & status & (0x7 << TIMERCTLA_INT_POSI));
 
@@ -207,7 +218,7 @@ void bk_timer_isr(void)
 
     do
     {
-        REG_WRITE(TIMER3_5_CTL, status);
+        REG_WRITE(TIMER3_5_CTL, REG_READ(TIMER3_5_CTL) & (~(0x7 << TIMERCTLB_INT_POSI)) | status);
     }
     while(REG_READ(TIMER3_5_CTL) & status & (0x7 << TIMERCTLB_INT_POSI));
 

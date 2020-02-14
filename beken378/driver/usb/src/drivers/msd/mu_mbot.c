@@ -273,8 +273,9 @@ MGC_MsdProtocol *MGC_CreateBotInstance(MUSB_Device *pDevice,
     MUSB_PipePtr hOutPipe;
     MGC_MsdBotProtocol *pBot;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     InEnd.pDevice = OutEnd.pDevice = pDevice;
-    switch(pDevice->ConnectionSpeed)
+    switch (pDevice->ConnectionSpeed)
     {
     case MUSB_CONNECTION_SPEED_HIGH:
         InEnd.wNakLimit = 16;
@@ -292,22 +293,23 @@ MGC_MsdProtocol *MGC_CreateBotInstance(MUSB_Device *pDevice,
     MUSB_MemCopy(&(InEnd.UsbDescriptor), pInEnd, sizeof(MUSB_EndpointDescriptor));
     MUSB_MemCopy(&(OutEnd.UsbDescriptor), pOutEnd, sizeof(MUSB_EndpointDescriptor));
     hInPipe = MUSB_OpenPipe(hBus, &InEnd, NULL);
-    if(!hInPipe)
+    if (!hInPipe)
     {
-        MUSB_PRT("!!!!!!!!!!!MGC_CreateBotInstance fail !!!!!!!!!!!!!!!!!!\r\n");
+        MUSB_DPRINTF("!!!!!!!!!!!MGC_CreateBotInstance fail !!!!!!!!!!!!!!!!!!\r\n");
         return NULL;
     }
 
     hOutPipe = MUSB_OpenPipe(hBus, &OutEnd, NULL);
-    if(!hOutPipe)
+    if (!hOutPipe)
     {
-        MUSB_PRT("!!!!!!!!!!!MGC_CreateBotInstance fail !!!!!!!!!!!!!!!!!!\r\n");
+        MUSB_DPRINTF("!!!!!!!!!!!MGC_CreateBotInstance fail !!!!!!!!!!!!!!!!!!\r\n");
         MUSB_ClosePipe(hInPipe);
         return NULL;
     }
 
     pBot = (MGC_MsdBotProtocol *)MUSB_MemAlloc(sizeof(MGC_MsdBotProtocol));
-    if(pBot)
+    MUSB_DPRINTF("MGC_CreateBotInstance: pBot = %p\r\n", pBot);
+    if (pBot)
     {
         MUSB_MemSet(pBot, 0, sizeof(MGC_MsdBotProtocol));
 
@@ -340,10 +342,14 @@ MGC_MsdProtocol *MGC_CreateBotInstance(MUSB_Device *pDevice,
 
         return &(pBot->Protocol);
     }
+    else
+    {
+		MUSB_ERR_PRINTF("MGC_CreateBotInstance: MUSB_MemAlloc failed\r\n");
+    }
 
     MUSB_ClosePipe(hInPipe);
     MUSB_ClosePipe(hOutPipe);
-    MUSB_PRT("MSD/BOT: failed to allocate instance data\r\n");
+    MUSB_DPRINTF("MSD/BOT: failed to allocate instance data\r\n");
 
     return NULL;
 }
@@ -354,6 +360,7 @@ void MGC_DestroyBotInstance(MGC_MsdProtocol *pProtocol)
     MGC_MsdBotVolume *pVolume;
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocol->pProtocolData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_CancelControlTransfer(pBot->ControlIrp.pDevice->pPort,
                                &(pBot->ControlIrp));
 
@@ -362,15 +369,16 @@ void MGC_DestroyBotInstance(MGC_MsdProtocol *pProtocol)
     MUSB_ClosePipe(pBot->hInPipe);
     pBot->hInPipe = NULL;
 
+    MUSB_DPRINTF("MGC_DestroyBotInstance: pBot->bLunCount=%d\r\n", pBot->bLunCount);
     /* loop through volumes and inform HFI implementation of destruction */
-    for(bIndex = 0; bIndex < pBot->bLunCount; bIndex++)
+    for (bIndex = 0; bIndex < pBot->bLunCount; bIndex++)
     {
         pVolume = &(pBot->aVolume[bIndex]);
         MUSB_HfiDeviceRemoved();
         pBot->pCmdSet->pfDestroyInstance(pVolume->pCmdSetInstance);
     }
 
-    if(pBot->aVolume)
+    if (pBot->aVolume)
     {
         MUSB_MemFree(pBot->aVolume);
     }
@@ -382,7 +390,8 @@ static uint8_t MGC_MsdBotReset(MGC_MsdBotProtocol *pBot)
 {
     uint32_t dwStatus;
 
-    if(!pBot || (pBot != pBot->pSelf)) return FALSE;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return FALSE;
 
     MUSB_DIAG_STRING(1, "MSD/BOT: performing BOT reset");
 
@@ -404,9 +413,10 @@ static uint8_t MGC_BotProtocolStartDevice(void *pProtocolData,
     uint32_t dwStatus;
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
 
-    if(!pBot || (pBot != pBot->pSelf)) return FALSE;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return FALSE;
 
-    MUSB_PRT("start get max lun\r\n");
+    MUSB_DPRINTF("start get max lun\r\n");
     MUSB_MemCopy(pBot->aSetup, MGC_aMsdBotGetMaxLunData,
                  sizeof(MGC_aMsdBotGetMaxLunData));
     pBot->aSetup[4] = pBot->pIfaceDesc->bInterfaceNumber;
@@ -426,6 +436,7 @@ static uint8_t MGC_BotProtocolStartDevice(void *pProtocolData,
 static uint8_t MGC_BotProtocolStopDevice(void *pProtocolData,
         MUSB_Device *pDevice)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* nothing to do */
     return TRUE;
 }
@@ -447,10 +458,12 @@ static uint8_t MGC_BotProtocolSendCmd(void *pProtocolData,
     uint8_t bCmdSize = bCmdLength > 16 ? 16 : bCmdLength;
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
 
-    if(!pBot || (pBot != pBot->pSelf)) return FALSE;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return FALSE;
 
     pVolume = &(pBot->aVolume[bLun]);
-    if(!pVolume->bBusy)
+    MUSB_DPRINTF("pVolume = 0x%p, pVolume->bBusy = %d\r\n", pVolume, pVolume->bBusy);
+    if (!pVolume->bBusy)
     {
         pVolume->bBusy          = TRUE;
         pVolume->bError         = FALSE;
@@ -475,11 +488,16 @@ static uint8_t MGC_BotProtocolSendCmd(void *pProtocolData,
         pBot->pCurrentVolume = pVolume;
 
         dwStatus = MUSB_StartTransfer(&(pVolume->CbwIrp));
-        if(MUSB_STATUS_OK == dwStatus)
+        if (MUSB_STATUS_OK == dwStatus)
         {
+		    MUSB_DPRINTF("MGC_BotProtocolSendCmd: MUSB_StartTransfer OK\r\n");
             return TRUE;
         }
-
+        else
+        {
+            MUSB_ERR_PRINTF("MGC_BotProtocolSendCmd: MUSB_StartTransfer error[0x%lx]\r\n",
+                            dwStatus);
+        }
     }
     return FALSE;
 }
@@ -492,7 +510,8 @@ static uint8_t MGC_BotProtocolSetDeviceInfo(void *pProtocolData,
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
     MGC_MsdBotVolume *pVolume = &(pBot->aVolume[bLun]);
 
-    if(!pBot || (pBot != pBot->pSelf)) return FALSE;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return FALSE;
 
     /* copy info */
     MUSB_MemCopy(&(pVolume->DeviceInfo), pInfo, sizeof(MUSB_HfiDeviceInfo));
@@ -506,15 +525,15 @@ static uint8_t MGC_BotProtocolSetDeviceInfo(void *pProtocolData,
     /* serial # from the USB string descriptor, since we cannot rely on SCSI inquiry */
     MUSB_MemSet(pVolume->DeviceInfo.awSerialNumber, 0, MUSB_HFI_MAX_VOLUME_SERIAL << 1);
     bCount = MUSB_MIN(MUSB_HFI_MAX_VOLUME_SERIAL, (pBot->aData[0] >> 1));
-    for(bIndex = 0; bIndex < bCount; bIndex++)
+    for (bIndex = 0; bIndex < bCount; bIndex++)
     {
         pVolume->DeviceInfo.awSerialNumber[bIndex] =
             MUSB_SWAP16P(&(pBot->aData[2 + (bIndex << 1)]));
     }
     pVolume->DeviceInfo.awSerialNumber[bIndex] = 0;
 
-    MUSB_PRT("pvolume->bAnnounced = %x,bLun=%x,pbot->bLuncount=%x\r\n", pVolume->bAnnounced, bLun, pBot->bLunCount);
-    if(pVolume->pCmdSetInstance && !pVolume->bAnnounced && (bLun < (pBot->bLunCount - 1)))
+    MUSB_DPRINTF("pvolume->bAnnounced = %x,bLun=%x,pbot->bLuncount=%x\r\n", pVolume->bAnnounced, bLun, pBot->bLunCount);
+    if (pVolume->pCmdSetInstance && !pVolume->bAnnounced && (bLun < (pBot->bLunCount - 1)))
     {
         pBot->pCmdSet->pfDiscoverDevice(
             pVolume->pCmdSetInstance, &(pBot->Protocol),
@@ -530,7 +549,8 @@ static uint8_t MGC_BotProtocolSetMediumInfo(void *pProtocolData,
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
     MGC_MsdBotVolume *pVolume = &(pBot->aVolume[bLun]);
 
-    if(!pBot || (pBot != pBot->pSelf)) return FALSE;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return FALSE;
 
     pVolume->bGotMedium = TRUE;
     MUSB_MemCopy(&(pVolume->MediumInfo), pInfo, sizeof(MUSB_HfiMediumInfo));
@@ -545,57 +565,65 @@ static void MGC_BotProtocolSetReady(void *pProtocolData,
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
     MGC_MsdBotVolume *pVolume = &(pBot->aVolume[bLun]);
 
-    if(!pBot || (pBot != pBot->pSelf)) return;
+    MUSB_DPRINTF1("MGC_BotProtocolSetReady\r\n");
+
+    if (!pBot || (pBot != pBot->pSelf)) return;
 
     pVolume->bIsReady = bIsReady;
 
-    if(bIsReady)
+    MUSB_DPRINTF("MGC_BotProtocolSetReady: bIsReady = %d\r\n", bIsReady);
+    MUSB_DPRINTF("MGC_BotProtocolSetReady: pVolume->bFormatting = %d\r\n", pVolume->bFormatting);
+    MUSB_DPRINTF("MGC_BotProtocolSetReady: pVolume->pfMediumCheckComplete = %d\r\n", pVolume->pfMediumCheckComplete);
+    if (bIsReady)
     {
+        MUSB_DPRINTF("MGC_BotProtocolSetReady: pVolume->bAnnounced = %d\r\n", pVolume->bAnnounced);
+        MUSB_DPRINTF("MGC_BotProtocolSetReady: pVolume->bGotMedium = %d\r\n", pVolume->bGotMedium);
+        MUSB_DPRINTF("MGC_BotProtocolSetReady: pVolume->bMediumAnnounced = %d\r\n", pVolume->bMediumAnnounced);
         /* ready */
-        if(pVolume->bFormatting)
+        if (pVolume->bFormatting)
         {
             /* was formatting, so must be format completion */
             pVolume->bFormatting = FALSE;
-            if(pVolume->pbFormatSuccess)
+            if (pVolume->pbFormatSuccess)
             {
                 *(pVolume->pbFormatSuccess) = TRUE;
             }
         }
-        else if(!pVolume->bAnnounced)
+        else if (!pVolume->bAnnounced)
         {
             /* ready and volume not yet announced */
             pVolume->bAnnounced = TRUE;
-            MUSB_PRT("[MUSB]HfiAddDevice fun\r\n");
+			MUSB_DPRINTF("MGC_BotProtocolSetReady: MUSB_HfiAddDevice fun\r\n");
             Status = MUSB_HfiAddDevice(&(pVolume->hVolume), &(pVolume->DeviceInfo),
                                        &(pVolume->Device));
-            if(MUSB_HFI_SUCCESS != Status)
+            if (MUSB_HFI_SUCCESS != Status)
             {
                 MUSB_DIAG_STRING(1, "MSD/BOT: HfiAddDevice failed");
                 pVolume->bIsReady = FALSE;
             }
             /* if we got medium info, announce medium also */
-            MUSB_PRT("[MUSB]bGotMedium = %x +++\r\n", pVolume->bGotMedium);
-            if(pVolume->bGotMedium)
+            MUSB_DPRINTF("[MUSB]bGotMedium = %x +++\r\n", pVolume->bGotMedium);
+            if (pVolume->bGotMedium)
             {
-                MUSB_PRT("[MUSB]HfiMediumInserted fun\r\n");
+                MUSB_DPRINTF("[MUSB]HfiMediumInserted fun\r\n");
                 pVolume->bMediumAnnounced = TRUE;
                 MUSB_HfiMediumInserted(pVolume->hVolume, &(pVolume->MediumInfo));
             }
         }
-        else if(pVolume->bAnnounced && pVolume->bGotMedium && !pVolume->bMediumAnnounced)
+        else if (pVolume->bAnnounced && pVolume->bGotMedium && !pVolume->bMediumAnnounced)
         {
             /* already announced and ready, must be medium inserted */
             pVolume->bMediumAnnounced = TRUE;
             MUSB_HfiMediumInserted(pVolume->hVolume, &(pVolume->MediumInfo));
         }
     }
-    else if(!pVolume->bFormatting)
+    else if (!pVolume->bFormatting)
     {
         /* not ready and not formatting */
-        if(pVolume->bAnnounced)
+        if (pVolume->bAnnounced)
         {
             /* already announced and not ready, so must be medium removal */
-            if(pVolume->bMediumAnnounced)
+            if (pVolume->bMediumAnnounced)
             {
                 MUSB_HfiMediumRemoved(pVolume->hVolume);
             }
@@ -603,8 +631,9 @@ static void MGC_BotProtocolSetReady(void *pProtocolData,
             pVolume->bMediumAnnounced = FALSE;
         }
     }
-    if(pVolume->pfMediumCheckComplete)
+    if (pVolume->pfMediumCheckComplete)
     {
+		MUSB_DPRINTF("++check check+++\r\n");
         pVolume->pfMediumCheckComplete(pVolume->hVolume);
         pVolume->pfMediumCheckComplete = NULL;
     }
@@ -617,13 +646,15 @@ static void MGC_BotProtocolSetFormatProgress(void *pProtocolData,
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pProtocolData;
     MGC_MsdBotVolume *pVolume = &(pBot->aVolume[bLun]);
 
-    if(!pBot || (pBot != pBot->pSelf)) return;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return;
 
     pVolume->bFormatProgress = bProgress;
 }
 
 static void MGC_MsdBotVolumeInit(MGC_MsdBotVolume *pVolume)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* set all immutable parts of protocol data and IRPs */
     pVolume->Cbw.dCbwSignature = MUSB_SWAP32(MGC_MSD_BOT_CBW_SIGNATURE);
     pVolume->Cbw.dCbwTag = MUSB_SWAP32(MGC_BOT_CBW_TAG_INIT_VALUE);
@@ -658,46 +689,61 @@ static uint32_t MGC_BotControlIrpComplete(void *pParam, MUSB_ControlIrp *pIrp)
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pParam;
     uint32_t dwStatus = pIrp->dwStatus;
 
-    if(!pBot || (pBot != pBot->pSelf))
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf))
         return 1;
 
-    if(pBot->bInit)
+    if (pBot->bInit)
     {
         /* we must be initializing, so it is GetMaxLUN */
         pBot->bInit = FALSE;
         pBot->bLunCount = 1;
+        MUSB_DPRINTF("MGC_BotControlIrpComplete: pBot->aVolume = 0x%p\r\n", pBot->aVolume);
+		MUSB_DPRINTF("MGC_BotControlIrpComplete: "
+				"pBot->bLunCount = %d, "
+				"sizeof(MGC_MsdBotVolume) = %d\r\n",
+				pBot->bLunCount,
+				sizeof(MGC_MsdBotVolume));
+        if (pBot->aVolume)
+        {
+            MUSB_MemFree(pBot->aVolume);
+        }
         pBot->aVolume = (MGC_MsdBotVolume *)MUSB_MemAlloc(
                             pBot->bLunCount * sizeof(MGC_MsdBotVolume));
-        if(pBot->aVolume)
+        if (pBot->aVolume)
         {
             MUSB_MemSet(pBot->aVolume, 0,
                         pBot->bLunCount * sizeof(MGC_MsdBotVolume));
-            for(bIndex = 0; bIndex < pBot->bLunCount; bIndex++)
+            for (bIndex = 0; bIndex < pBot->bLunCount; bIndex++)
             {
                 pVolume = &(pBot->aVolume[bIndex]);
-                //即函数 : MGC_ScsiCmdSetCreateInstance()
+                // 即函数 : MGC_ScsiCmdSetCreateInstance()
                 pVolume->pCmdSetInstance = pBot->pCmdSet->pfCreateInstance(pBot->bLunCount);
-                if(pVolume->pCmdSetInstance)
+                if (pVolume->pCmdSetInstance)
                 {
                     pVolume->pBot = pBot;
                     pVolume->bLun = bIndex;
                     MGC_MsdBotVolumeInit(pVolume);
                 }
             }
-            if(pVolume != NULL)
+            if (pVolume != NULL)
             {
-                if(pVolume->pCmdSetInstance)
+                if (pVolume->pCmdSetInstance)
                 {
                     /* kick off command-set-specific device discovery for first LUN */
                     // MGC_ScsiCmdSetDiscoverDevice()，发送cmd12命令
                     pBot->pCmdSet->pfDiscoverDevice(
                         pVolume->pCmdSetInstance, &(pBot->Protocol), 0);
-                    //发送完成后,会产生中断,在BSR中则会调用 pVolume->CbwIrp.pfIrpComplete = MGC_BotCbwComplete;
+                    // 发送完成后,会产生中断,在BSR中则会调用 pVolume->CbwIrp.pfIrpComplete = MGC_BotCbwComplete;
                 }
             }
         }
+		else
+		{
+			MUSB_ERR_PRINTF("MGC_BotControlIrpComplete: MUSB_MemAlloc failed\r\n");
+		}
     }
-    else if(pBot->bCswRetry)
+    else if (pBot->bCswRetry)
     {
         /* data was stalled, so try CSW after clearing */
         MUSB_FlushPipe(pBot->hInPipe);
@@ -706,7 +752,7 @@ static uint32_t MGC_BotControlIrpComplete(void *pParam, MUSB_ControlIrp *pIrp)
     else
     {
         /* must be reset */
-        switch(pBot->bResetStage)
+        switch (pBot->bResetStage)
         {
         case MGC_MSD_BOT_RESET_STAGE_CMD:
             /* start clear-in stage */
@@ -741,9 +787,9 @@ static uint32_t MGC_BotControlIrpComplete(void *pParam, MUSB_ControlIrp *pIrp)
             pBot->pCurrentVolume->bBusy = FALSE;
 
             /* call completion handler if present */
-            if(pBot->pCurrentVolume->pfCmdComplete)
+            if (pBot->pCurrentVolume->pfCmdComplete)
             {
-                switch(pBot->pCurrentVolume->bTransferStage)
+                switch (pBot->pCurrentVolume->bTransferStage)
                 {
                 case MGC_MSD_BOT_TRANSFER_STAGE_DATAIN:
                 case MGC_MSD_BOT_TRANSFER_STAGE_DATAOUT:
@@ -773,7 +819,7 @@ static uint32_t MGC_BotControlIrpComplete(void *pParam, MUSB_ControlIrp *pIrp)
         default:
             break;
         }	/* END: switch on reset stage */
-        if(MUSB_STATUS_OK != dwStatus)
+        if (MUSB_STATUS_OK != dwStatus)
         {
             MUSB_DIAG_STRING(1, "MSD/BOT: reset command submit failed; probably fatal");
         }
@@ -787,10 +833,11 @@ static uint32_t MGC_BotCbwComplete(void *pParam, MUSB_Irp *pIrp)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pParam;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf))
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf))
         return RetVal;
     /* handle any USB error */
-    if(pIrp->dwStatus)
+    if (pIrp->dwStatus)
     {
         pVolume->bError = TRUE;
         MUSB_DIAG1(1, "MSD/BOT: USB error on CBW transfer: ", pIrp->dwStatus, 16, 0);
@@ -801,11 +848,11 @@ static uint32_t MGC_BotCbwComplete(void *pParam, MUSB_Irp *pIrp)
     /* by virtue of a volume's CBW getting sent, it becomes current */
     pBot->pCurrentVolume = pVolume;
 
-    if(pVolume->Cbw.dCbwDataTransferLength)
+    if (pVolume->Cbw.dCbwDataTransferLength)
     {
         /* data, so start it */
         pVolume->DataIrp.dwStatus = 0;
-        if(pVolume->Cbw.bmCbwFlags & MGC_MSD_BOT_DIR_IN)
+        if (pVolume->Cbw.bmCbwFlags & MGC_MSD_BOT_DIR_IN)
         {
             pVolume->bTransferStage = MGC_MSD_BOT_TRANSFER_STAGE_DATAIN;
             pVolume->DataIrp.hPipe = pBot->hInPipe;
@@ -835,17 +882,18 @@ static uint32_t MGC_BotDataComplete(void *pParam, MUSB_Irp *pIrp)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pParam;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf)) return RetVal;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return RetVal;
     /* handle any USB error */
-    if(pIrp->dwStatus)
+    if (pIrp->dwStatus)
     {
         pVolume->bError = TRUE;
-        if(MUSB_STATUS_STALLED == pIrp->dwStatus)
+        if (MUSB_STATUS_STALLED == pIrp->dwStatus)
         {
             /* STALL; initiate recovery */
             pBot->bCswRetry = TRUE;
             RetVal = MUSB_STATUS_STALLED;
-            if(pVolume->Cbw.bmCbwFlags & MGC_MSD_BOT_DIR_IN)
+            if (pVolume->Cbw.bmCbwFlags & MGC_MSD_BOT_DIR_IN)
             {
                 MUSB_MemCopy(pBot->aSetup, MGC_aMsdBotClearHaltData,
                              sizeof(MGC_aMsdBotClearHaltData));
@@ -872,11 +920,11 @@ static uint32_t MGC_BotDataComplete(void *pParam, MUSB_Irp *pIrp)
         else
         {
             /* other error, retry or give up */
-            if(pVolume->bRetries++ < MGC_BOT_DATA_MAX_RETRIES)
+            if (pVolume->bRetries++ < MGC_BOT_DATA_MAX_RETRIES)
             {
                 MUSB_StartTransfer(&(pVolume->DataIrp));
             }
-            else if(pVolume->pfCmdComplete)
+            else if (pVolume->pfCmdComplete)
             {
                 pVolume->pfCmdComplete(pVolume->pCompleteParam,
                                        pVolume->DataIrp.pBuffer,
@@ -890,7 +938,7 @@ static uint32_t MGC_BotDataComplete(void *pParam, MUSB_Irp *pIrp)
     pVolume->bRetries = 0;
     RetVal = 0;
     /* if it looks like a CSW, maybe it is a CSW */
-    if((pVolume->bTransferStage == MGC_MSD_BOT_TRANSFER_STAGE_DATAIN) &&
+    if ((pVolume->bTransferStage == MGC_MSD_BOT_TRANSFER_STAGE_DATAIN) &&
             (13 == pIrp->dwActualLength))
     {
         MUSB_MemCopy(pBot->CswIrp.pBuffer, pIrp->pBuffer, 13);
@@ -907,24 +955,26 @@ static uint32_t MGC_BotDataComplete(void *pParam, MUSB_Irp *pIrp)
 
 static uint32_t MGC_BotCswComplete(void *pParam, MUSB_Irp *pIrp)
 {
-    uint32_t dwStatus, RetVal;
+	uint32_t dwStatus = 0,RetVal;
     MGC_MsdBotProtocol *pBot = (MGC_MsdBotProtocol *)pParam;
     MGC_MsdBotVolume *pVolume = pBot->pCurrentVolume;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     RetVal = 1;
 
-    if(!pBot || (pBot != pBot->pSelf))
+    if (!pBot || (pBot != pBot->pSelf))
         return RetVal;
     pVolume->bTransferStage = MGC_MSD_BOT_TRANSFER_STAGE_NONE;
 
     /* handle any USB error */
-    if(pIrp->dwStatus)
+    if (pIrp->dwStatus)
     {
         pVolume->bError = TRUE;
-        if(!pBot->bCswRetry)
+        if (!pBot->bCswRetry)
         {
             /* not retried yet */
             pBot->bCswRetry = TRUE;
-            if(MUSB_STATUS_STALLED == pIrp->dwStatus)
+            if (MUSB_STATUS_STALLED == pIrp->dwStatus)
             {
                 RetVal = MUSB_STATUS_STALLED;
                 /* STALL; clear it and then retry */
@@ -951,7 +1001,7 @@ static uint32_t MGC_BotCswComplete(void *pParam, MUSB_Irp *pIrp)
         return RetVal;
     }
 
-    if(13 != pIrp->dwActualLength)
+    if (13 != pIrp->dwActualLength)
     {
         pBot->bCswRetry = FALSE;
         pVolume->bError = TRUE;
@@ -962,9 +1012,9 @@ static uint32_t MGC_BotCswComplete(void *pParam, MUSB_Irp *pIrp)
     }
 
     /* check dwTag */
-    if(pBot->Csw.dCswTag != pVolume->Cbw.dCbwTag)
+    if (pBot->Csw.dCswTag != pVolume->Cbw.dCbwTag)
     {
-        if(pBot->bCswRetry)
+        if (pBot->bCswRetry)
         {
             pVolume->bTransferStage = MGC_MSD_BOT_TRANSFER_STAGE_CSW;
             dwStatus = MUSB_StartTransfer(&(pBot->CswIrp));
@@ -982,7 +1032,7 @@ static uint32_t MGC_BotCswComplete(void *pParam, MUSB_Irp *pIrp)
     }
 
     /* check for explicitly-signalled phase error */
-    if(2 == pBot->Csw.bCswStatus)
+    if (2 == pBot->Csw.bCswStatus)
     {
         pBot->bCswRetry = FALSE;
         pVolume->bError = TRUE;
@@ -991,12 +1041,12 @@ static uint32_t MGC_BotCswComplete(void *pParam, MUSB_Irp *pIrp)
         return RetVal;
     }
 
-    dwStatus++;
+    (void)dwStatus;
     pBot->bCswRetry = FALSE;
     pVolume->bBusy = FALSE;
 
     /* call completion handler if present */
-    if(pVolume->pfCmdComplete)
+    if (pVolume->pfCmdComplete)
     {
         return pVolume->pfCmdComplete(pVolume->pCompleteParam,
                                       pVolume->DataIrp.pBuffer,
@@ -1010,6 +1060,7 @@ static void MGC_MsdBotMountComplete(void *pPrivateData, uint8_t bSuccess)
 {
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pPrivateData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pVolume->pfMountComplete(pVolume->hVolume, bSuccess);
 }
 
@@ -1022,14 +1073,15 @@ static MUSB_HfiStatus MGC_MsdBotMountVolume(void *pDeviceData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
-    if(pBot->pCmdSet->pfMountDevice)
+    if (pBot->pCmdSet->pfMountDevice)
     {
         pVolume->pfMountComplete = pfMountComplete;
-        if(!pBot->pCmdSet->pfMountDevice(pVolume->pCmdSetInstance,
+        if (!pBot->pCmdSet->pfMountDevice(pVolume->pCmdSetInstance,
                                          MGC_MsdBotMountComplete, pVolume, &(pBot->Protocol), pVolume->bLun))
         {
             return MUSB_HFI_ERROR_TRANSFER;
@@ -1047,6 +1099,7 @@ static MUSB_HfiStatus MGC_MsdBotGetMediumInfo(void *pDeviceData,
 {
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_MemCopy(pMediumInfo, &(pVolume->MediumInfo),
                  sizeof(MUSB_HfiMediumInfo));
 
@@ -1064,10 +1117,10 @@ static uint32_t MGC_MsdBotDataTransferComplete(void *pPrivateData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pPrivateData;
     MUSB_pfHfiTransferComplete pfTransferComplete = pVolume->pfHfiTransferComplete;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: replace divide with shift */
     return pfTransferComplete(pVolume->hVolume,
                               (uint16_t)(dwDataLength / pVolume->DeviceInfo.dwBlockSize));
-
 }
 
 static MUSB_HfiStatus MGC_MsdBotReadDevice(void *pDeviceData,
@@ -1085,18 +1138,19 @@ static MUSB_HfiStatus MGC_MsdBotReadDevice(void *pDeviceData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
     bCmdLength = pBot->pCmdSet->pfGetReadCmd(pVolume->pCmdSetInstance,
                  aCmdBuffer, 16, dwStartBlockLo, dwStartBlockHi, wBlockCount,
                  pVolume->bLun);
-    if(bCmdLength)
+    if (bCmdLength)
     {
         pVolume->pfHfiTransferComplete = pfTransferComplete;
         dwBlockSize = pVolume->MediumInfo.dwBlockSize;
-        if(!dwBlockSize) dwBlockSize = pVolume->DeviceInfo.dwBlockSize;
+        if (!dwBlockSize) dwBlockSize = pVolume->DeviceInfo.dwBlockSize;
         bOk = MGC_BotProtocolSendCmd(pBot, pVolume, pVolume->bLun,
                                      aCmdBuffer, bCmdLength, pBuffer,
                                      wBlockCount * dwBlockSize,
@@ -1124,12 +1178,13 @@ static MUSB_HfiStatus MGC_MsdBotWriteDevice(void *pDeviceData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: support bVerify */
-    if(bVerify)
+    if (bVerify)
     {
         return MUSB_HFI_ERROR_VERIFY;
     }
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
@@ -1137,11 +1192,11 @@ static MUSB_HfiStatus MGC_MsdBotWriteDevice(void *pDeviceData,
     bCmdLength = pBot->pCmdSet->pfGetWriteCmd(pVolume->pCmdSetInstance,
                  aCmdBuffer, 16, dwStartBlockLo, dwStartBlockHi, wBlockCount,
                  pVolume->bLun);
-    if(bCmdLength)
+    if (bCmdLength)
     {
         pVolume->pfHfiTransferComplete = pfTransferComplete;
         dwBlockSize = pVolume->MediumInfo.dwBlockSize;
-        if(!dwBlockSize) dwBlockSize = pVolume->DeviceInfo.dwBlockSize;
+        if (!dwBlockSize) dwBlockSize = pVolume->DeviceInfo.dwBlockSize;
         bOk = MGC_BotProtocolSendCmd(pBot, pVolume, pVolume->bLun, aCmdBuffer,
                                      bCmdLength, pBuffer, wBlockCount * dwBlockSize,
                                      TRUE, MGC_MsdBotDataTransferComplete, bAllowDma, 0);
@@ -1155,13 +1210,14 @@ static MUSB_HfiStatus MGC_MsdBotFlushDevice(void *pDeviceData)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
-    if(pBot->pCmdSet->pfFlushDevice)
+    if (pBot->pCmdSet->pfFlushDevice)
     {
-        if(!pBot->pCmdSet->pfFlushDevice(pVolume->pCmdSetInstance,
+        if (!pBot->pCmdSet->pfFlushDevice(pVolume->pCmdSetInstance,
                                          &(pBot->Protocol), pVolume->bLun))
         {
             return MUSB_HFI_ERROR_TRANSFER;
@@ -1177,11 +1233,12 @@ static MUSB_HfiStatus MGC_MsdBotFormatMedium(void *pDeviceData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
-    if(pVolume->DeviceInfo.bCanFormat &&
+    if (pVolume->DeviceInfo.bCanFormat &&
             pBot->pCmdSet->pfFormatDevice(pVolume->pCmdSetInstance,
                                           &(pBot->Protocol), dwBlockSize, pVolume->bLun))
     {
@@ -1196,6 +1253,7 @@ static uint8_t MGC_MsdBotGetFormatProgress(void *pDeviceData)
 {
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return pVolume->bFormatProgress;
 }
 
@@ -1204,9 +1262,10 @@ static MUSB_HfiStatus MGC_MsdBotAbortFormat(void *pDeviceData)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_SUCCESS;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_SUCCESS;
 
-    if(pBot->pCmdSet->pfAbortFormat(pVolume->pCmdSetInstance,
+    if (pBot->pCmdSet->pfAbortFormat(pVolume->pCmdSetInstance,
                                     &(pBot->Protocol), pVolume->bLun))
     {
         pVolume->bFormatting = FALSE;
@@ -1220,13 +1279,14 @@ static MUSB_HfiStatus MGC_MsdBotUnmountVolume(void *pDeviceData)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf) || !pVolume->bIsReady)
     {
         return MUSB_HFI_ERROR_MEDIA_REMOVED;
     }
-    if(pBot->pCmdSet->pfUnmountDevice)
+    if (pBot->pCmdSet->pfUnmountDevice)
     {
-        if(!pBot->pCmdSet->pfUnmountDevice(pVolume->pCmdSetInstance,
+        if (!pBot->pCmdSet->pfUnmountDevice(pVolume->pCmdSetInstance,
                                            &(pBot->Protocol), pVolume->bLun))
         {
             return MUSB_HFI_ERROR_TRANSFER;
@@ -1240,12 +1300,13 @@ static MUSB_HfiStatus MGC_MsdBotCheckMedium(void *pDeviceData)
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_ERROR_TRANSFER;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_ERROR_TRANSFER;
 
     pVolume->pfMediumCheckComplete = NULL;
-    if(pBot->pCmdSet->pfCheckMedium)
+    if (pBot->pCmdSet->pfCheckMedium)
     {
-        if(!pBot->pCmdSet->pfCheckMedium(pVolume->pCmdSetInstance,
+        if (!pBot->pCmdSet->pfCheckMedium(pVolume->pCmdSetInstance,
                                          &(pBot->Protocol), pVolume->bLun))
         {
             return MUSB_HFI_ERROR_TRANSFER;
@@ -1260,12 +1321,13 @@ static MUSB_HfiStatus MGC_MsdBotCheckMediumNotify(void *pDeviceData,
     MGC_MsdBotVolume *pVolume = (MGC_MsdBotVolume *)pDeviceData;
     MGC_MsdBotProtocol *pBot = pVolume->pBot;
 
-    if(!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_ERROR_TRANSFER;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (!pBot || (pBot != pBot->pSelf)) return MUSB_HFI_ERROR_TRANSFER;
 
     pVolume->pfMediumCheckComplete = pfMediumCheckComplete;
-    if(pBot->pCmdSet->pfCheckMedium)
+    if (pBot->pCmdSet->pfCheckMedium)
     {
-        if(!pBot->pCmdSet->pfCheckMedium(pVolume->pCmdSetInstance,
+        if (!pBot->pCmdSet->pfCheckMedium(pVolume->pCmdSetInstance,
                                          &(pBot->Protocol), pVolume->bLun))
         {
             return MUSB_HFI_ERROR_TRANSFER;
@@ -1274,4 +1336,4 @@ static MUSB_HfiStatus MGC_MsdBotCheckMediumNotify(void *pDeviceData,
     return MUSB_HFI_SUCCESS;
 }
 #endif // CFG_SUPPORT_MSD
-// eof
+

@@ -95,7 +95,8 @@ enum
 	BSR_CONNECTED_EVENT,
 	
 	BSR_DISCONNECT_EVENT,
-	BSR_READ_OK_EVENT
+	BSR_READ_OK_EVENT,
+    BSR_WRITE_OK_EVENT
 };
 
 /*******************************************************************************

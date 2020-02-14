@@ -18,7 +18,10 @@
 
 extern SDIO_Error sdcard_initialize(void);
 extern SDIO_Error sdcard_read_single_block(UINT8 *readbuff, UINT32 readaddr, UINT32 blocksize);
-extern SDIO_Error sdcard_write_multi_block(UINT8 *writebuff, UINT32 writeaddr, UINT32 blocksize);
+extern SDIO_Error sdcard_write_single_block(UINT8 *writebuff, UINT32 writeaddr);
+
+extern SDIO_Error sdcard_read_multi_block(UINT8 *read_buff, int first_block, int block_num);
+extern SDIO_Error sdcard_write_multi_block(UINT8 *write_buff, UINT32 first_block, UINT32 block_num);
 
 /* RT-Thread Device Driver Interface */
 static struct rt_device sdcard_device;
@@ -53,16 +56,15 @@ static rt_size_t rt_sdcard_read(rt_device_t dev, rt_off_t pos, void* buffer, rt_
     rt_uint32_t result = RT_EOK;
 
     UINT32 start_blk_addr;
-    UINT8  read_blk_numb, numb;
+    UINT8  read_blk_num, num;
     UINT8* read_data_buf;
-
     rt_mutex_take(&sdcard_mutex, RT_WAITING_FOREVER);
-    // check operate parameter
     start_blk_addr = pos;
-    read_blk_numb = size;
+    read_blk_num = size;
     read_data_buf = (UINT8*)buffer;
-    
-    for(numb=0; numb<read_blk_numb; numb++)
+
+#if 0 
+    for(num=0; num<read_blk_num; num++)
     {
         result = sdcard_read_single_block(read_data_buf, start_blk_addr, 
                     SD_DEFAULT_BLOCK_SIZE);
@@ -76,7 +78,11 @@ static rt_size_t rt_sdcard_read(rt_device_t dev, rt_off_t pos, void* buffer, rt_
         start_blk_addr++;
         read_data_buf += SD_DEFAULT_BLOCK_SIZE;
     }
-    
+ #else
+	if(SD_OK != sdcard_read_multi_block(read_data_buf,start_blk_addr,read_blk_num))
+		size = 0;
+	
+ #endif
 exit:
     rt_mutex_release(&sdcard_mutex);
 
@@ -86,16 +92,24 @@ exit:
 static rt_size_t rt_sdcard_write (rt_device_t dev, rt_off_t pos, const void* buffer, rt_size_t size)
 {
     UINT32 start_blk_addr;
-    UINT32 writesize;
     UINT8* write_data_buf;	
 
     //	rt_kprintf("===rt write start addr=%x,size=%x====\r\n",pos,size);
     rt_mutex_take(&sdcard_mutex, RT_WAITING_FOREVER);
     start_blk_addr = pos;
     write_data_buf = (rt_uint8_t *)buffer;
-    writesize = size * SD_DEFAULT_BLOCK_SIZE;
-    if(SD_OK != sdcard_write_multi_block(write_data_buf,start_blk_addr,writesize))
-        size = 0;
+#if 0
+	if(1 == size)
+	{
+		if(SD_OK != sdcard_write_single_block(write_data_buf,start_blk_addr))
+			size = 0;
+	}
+	else
+#endif
+	{
+	    if(SD_OK != sdcard_write_multi_block(write_data_buf,start_blk_addr,size))
+	        size = 0;
+	}
     rt_mutex_release(&sdcard_mutex);
 
     return size;

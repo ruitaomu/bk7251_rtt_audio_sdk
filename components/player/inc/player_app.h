@@ -1,8 +1,11 @@
 /*
- * Player Application
+ * File: player_app.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
  */
-#ifndef PLAYER_APP_H__
-#define PLAYER_APP_H__
+
+#ifndef __PLAYER_APP_H__
+#define __PLAYER_APP_H__
 
 #include <rtdef.h>
 

@@ -14,6 +14,7 @@
 #define DIV_24M_1                                    (3)
 
 #define JPEG_REG1                                    (JPEG_BASE + 1 * 4)
+#define PCLK_REV                                     (1 << 0)
 #define VIDEO_BYTE_REV                               (1 << 1)
 #define YUV_FMT_SEL_POSI                             (2) 
 #define YUV_FMT_SEL_MASK                             (0x3)

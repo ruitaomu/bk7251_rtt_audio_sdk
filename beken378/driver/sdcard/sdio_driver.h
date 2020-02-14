@@ -175,8 +175,9 @@ typedef enum
 #define	SD_CLK_PIN_TIMEOUT2				0x8000
 #define SD_CARD_OFFLINE				    0
 #define SD_CARD_ONLINE				    1
-#define SD_DETECT_DEFAULT_GPIO                  31
-//extern  uint8 SD_det_gpio_flag;
+
+
+//#define CONFIG_SDCARD_BUSWIDTH_4LINE
 
 // interface function
 void sdio_set_low_clk(void);
@@ -190,16 +191,14 @@ SDIO_Error sdio_wait_cmd_response(UINT32 cmd);
 void sdio_get_cmdresponse_argument(UINT8 num, UINT32 *resp);
 void sdio_setup_data(UINT32 data_dir, UINT32 byte_len);
 void sdio_set_data_timeout(UINT32 timeout);
-void sdcard_set_host_buswidth_4line(void);
-void sdcard_set_host_buswidth_1line(void);
 
 SDIO_Error sdcard_wait_receive_data(UINT8 *receive_buf);
-SDIO_Error sdcard_wait_write_end(void);
-SDIO_Error sdcard_write_data(UINT8 *writebuff, UINT32 block);
+//SDIO_Error sdcard_wait_write_end(void);
+//SDIO_Error sdcard_write_data(UINT8 *writebuff, UINT32 block);
 void driver_sdcard_recv_data_start(int timeout );
 //uint8 sd_clk_is_attached(void);
-uint8 sd_is_attached(void);
-void sdio_register_reenable(void);
+//uint8 sd_is_attached(void);
+//void sdio_register_reenable(void);
 int wait_Receive_Data(void);
 
 #endif

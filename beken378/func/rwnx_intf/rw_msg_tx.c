@@ -659,7 +659,7 @@ int rw_msg_set_filter(uint32_t filter)
     return rw_msg_send(set_filter_req_param, MM_SET_FILTER_CFM, NULL);
 }
 
-int rw_msg_set_channel(uint32_t channel, void *cfm)
+int rw_msg_set_channel(uint32_t channel, uint32_t band_width, void *cfm)
 {
     struct mm_set_channel_req *set_chnl_par;
 
@@ -669,7 +669,7 @@ int rw_msg_set_channel(uint32_t channel, void *cfm)
         return -ENOMEM;
 
     set_chnl_par->band = PHY_BAND_2G4;
-    set_chnl_par->type = PHY_CHNL_BW_20;
+    set_chnl_par->type = band_width;//PHY_CHNL_BW_20;
     set_chnl_par->prim20_freq = set_chnl_par->center1_freq
                                 = rw_ieee80211_get_centre_frequency(channel);
     set_chnl_par->center2_freq = 0;

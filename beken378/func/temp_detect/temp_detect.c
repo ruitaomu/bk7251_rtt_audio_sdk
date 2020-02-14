@@ -318,8 +318,10 @@ static void temp_detect_polling_handler(void)
                     cur_val,
                     g_temp_detect_config.detect_thre);
 
+    ps_set_temp_prevent();
+    bk_wlan_dtim_rf_ps_mode_do_wakeup();
     rwnx_cal_do_temp_detect(cur_val, thre, &g_temp_detect_config.last_detect_val);
-
+    ps_clear_temp_prevent();
     #if 0 //(CFG_SOC_NAME != SOC_BK7231)
 	// bk7231u no need xtal cali
     if(last_detect_val != g_temp_detect_config.last_detect_val)

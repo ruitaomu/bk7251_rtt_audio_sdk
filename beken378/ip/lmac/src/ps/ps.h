@@ -82,6 +82,9 @@
 //  Station is waiting for data
 #define PS_WAITING_ADD_KEY        CO_BIT(6)
 
+//  Station is waiting for temp detect
+#define PS_WAITING_TEMP         CO_BIT(8)
+
 /// Mask showing that all ACs UAPSD enabled
 #define PS_ALL_UAPSD_ACS           0x0F
 

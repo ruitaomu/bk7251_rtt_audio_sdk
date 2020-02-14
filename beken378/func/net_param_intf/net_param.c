@@ -79,6 +79,8 @@ static UINT32 info_item_len(NET_INFO_ITEM item)
 		case RF_CFG_TSSI_ITEM:
 		case RF_CFG_DIST_ITEM:
 		case RF_CFG_MODE_ITEM: 
+		case RF_CFG_TSSI_B_ITEM:
+        case REBOOT_FLAG_ITEM:
 			len = sizeof(ITEM_COMM_ST);
 			break;
 		case WIFI_MAC_ITEM:
@@ -138,6 +140,8 @@ UINT32 get_info_item(NET_INFO_ITEM item,UINT8 *ptr0,UINT8 *ptr1, UINT8 *ptr2)
 		case RF_CFG_DIST_ITEM:
 		case RF_CFG_MODE_ITEM: 
 		case CHARGE_CONFIG_ITEM:
+		case RF_CFG_TSSI_B_ITEM:
+        case REBOOT_FLAG_ITEM:
 			if(ptr0 != NULL)
 			{
 				ddev_read(flash_handle, (char *)ptr0, head.len, addr_start);
@@ -237,6 +241,8 @@ UINT32 save_info_item(NET_INFO_ITEM item,UINT8 *ptr0,UINT8*ptr1,UINT8 *ptr2)
 		case RF_CFG_TSSI_ITEM:
 		case RF_CFG_DIST_ITEM:
 		case RF_CFG_MODE_ITEM: 
+		case RF_CFG_TSSI_B_ITEM:
+        case REBOOT_FLAG_ITEM:
 			os_memcpy(item_buf,ptr0,4);
 			break;
 			
@@ -255,7 +261,7 @@ UINT32 save_info_item(NET_INFO_ITEM item,UINT8 *ptr0,UINT8*ptr1,UINT8 *ptr2)
 			os_memcpy(item_buf+32,ptr2,16);
 			break;
 		case CHARGE_CONFIG_ITEM:
-			os_memcpy(item_buf,ptr0,3);
+			os_memcpy(item_buf,ptr0,4);
 			break;
 
 		default:
@@ -291,3 +297,15 @@ UINT32 test_get_whole_tbl(UINT8 *ptr)
 	UINT32 len;
 	return search_info_tbl(ptr,&len);
 }
+
+UINT32 get_reboot_item_value(void)
+{
+	UINT32 flag;
+    get_info_item(REBOOT_FLAG_ITEM, &flag, NULL, NULL);
+    return flag;
+}
+void set_reboot_item_value(UINT32 value)
+{
+    save_info_item(REBOOT_FLAG_ITEM, &value, NULL, NULL);
+}
+

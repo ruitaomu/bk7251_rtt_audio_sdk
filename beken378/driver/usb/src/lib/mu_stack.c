@@ -34,6 +34,7 @@ MUSB_Stack *MUSB_StackInit(MUSB_Stack *pStack,
     }
     if(pResult)
     {
+        MUSB_MemSet(pResult, 0, sizeof(MUSB_Stack));
         pResult->wNextTopIndex = 0;
         pArray = MUSB_ArrayInit(&(pResult->Array), wItemSize,
                                 wStaticItemCount, pStaticBuffer);
@@ -45,6 +46,10 @@ MUSB_Stack *MUSB_StackInit(MUSB_Stack *pStack,
             }
             pResult = NULL;
         }
+    }
+    else
+    {
+		MUSB_ERR_PRINTF("MUSB_StackInit: MUSB_MemAlloc failed\r\n");
     }
     return pResult;
 }

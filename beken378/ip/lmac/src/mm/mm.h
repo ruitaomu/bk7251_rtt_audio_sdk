@@ -62,7 +62,7 @@
 #endif
 
 /// Beacon loss threshold above which we consider the connection as lost
-#define MM_BEACON_LOSS_THD          (30) 
+#define MM_BEACON_LOSS_THD          (200) 
 
 /// Periodicity of keep-alive NULL frame transmission
 #define MM_KEEP_ALIVE_PERIOD        (1000000)   // 1s
@@ -316,6 +316,8 @@ struct mm_env_tag
     #endif
     /// IDLE state requested by the host
     uint8_t host_idle;
+
+    struct mm_timer_tag machw_timer;
 };
 
 /*

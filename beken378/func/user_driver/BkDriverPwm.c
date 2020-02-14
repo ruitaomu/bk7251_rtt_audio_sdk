@@ -71,7 +71,7 @@ OSStatus bk_pwm_stop(bk_pwm_t pwm)
     UINT32 param;
 
     param = pwm;
-    ret = sddev_control(PWM_DEV_NAME, CMD_PWM_UINT_DISABLE, &param);
+    ret = sddev_control(PWM_DEV_NAME, CMD_PWM_UNIT_DISABLE, &param);
     ASSERT(PWM_SUCCESS == ret);
 
     return kNoErr;

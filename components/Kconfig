@@ -1,0 +1,32 @@
+menu "Player Config"
+
+config PKG_USING_PLAYER
+    bool "Using RT-Thread player v1.2.7"
+    default y
+
+config PLAYER_USING_EXAMPLE00
+    bool "Using player cmd"
+    depends on PKG_USING_PLAYER
+    default y
+
+config PLAYER_USING_EXAMPLE01
+    bool "Using listplayer cmd"
+    depends on PKG_USING_PLAYER
+    default n
+
+config PLAYER_USING_EXAMPLE02
+    bool "Using codec cmd"
+    depends on PKG_USING_PLAYER
+    default y
+
+config PLAYER_USING_EXAMPLE03
+    bool "Using tts play cmd"
+    depends on PKG_USING_PLAYER
+    default y
+
+config PLAYER_USING_EXAMPLE04
+    bool "Using pls test cmd"
+    depends on PKG_USING_PLAYER
+    default n
+
+endmenu

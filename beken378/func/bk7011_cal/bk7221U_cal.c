@@ -20,6 +20,7 @@
 #include "cmd_evm.h"
 #include "temp_detect_pub.h"
 #endif
+#include "power_save_pub.h"
 
 
 #define CAL_RESULT_TO_FLASH		0
@@ -61,7 +62,6 @@ extern void bk7011_cal_pll(void);
 static void bk7011_cal_dcormod_save_base(INT32 mod);
 static void bk7011_cal_dcormod_do_fitting(void);
 
-
 static INT32 gtx_dc_n = 0;//the times of first dc cal. 
 static UINT32 gst_rx_adc = CAL_DELAY100US;
 static UINT32 gst_sar_adc = CAL_DELAY05US;
@@ -98,7 +98,7 @@ static UINT32 gst_sar_adc = CAL_DELAY05US;
 #define TRX_REG_0XB_VAL         0x87248F37//0x45248437
 #define TRX_REG_0XC_VAL         0x00228765
 #define TRX_REG_0XD_VAL         0xDDF90339
-#define TSSI_POUT_TH            0x6E
+#define TSSI_POUT_TH            0x7D  //125
 #endif
 
 #if 0
@@ -369,9 +369,11 @@ INT32 grx_amp_err_wr = 0x200;
 INT32 grx_phase_err_wr = 0x041;
 
 #include "net_param_pub.h"
-
+#define TSSI_TH_G       (100)
+#define TSSI_TH_B       (125)
 UINT32 g_cali_mode = CALI_MODE_AUTO;
-INT32 gtx_tssi_thred = TSSI_POUT_TH;
+INT32 gtx_tssi_thred_b = TSSI_TH_B;
+INT32 gtx_tssi_thred_g = TSSI_TH_G;
 
 #define PWRI(gain, rb_28_31, rc_8_11, rc_4_7, rc_0_3, ra_8_13, ra_4_7)      \
 {                                     \
@@ -630,10 +632,12 @@ void delay100us(INT32 num)
 
 
 #define CAL_WR_TRXREGS(reg)    do{\
+                                    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();\
                                     while(BK7011RCBEKEN.REG0x1->value & (0x1 << reg));\
                                     BK7011TRXONLY.REG##reg->value = BK7011TRX.REG##reg->value;\
                                     cal_delay(6);\
                                     while(BK7011RCBEKEN.REG0x1->value & (0x1 << reg));\
+                                    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();\
                                 }while(0)
 
 
@@ -1672,7 +1676,9 @@ void rwnx_cal_set_txpwr_by_channel(UINT32 channel)
     }
     os_printf("set pwr:%d - c:%d\r\n", pwr_gain, channel);
 
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
     rwnx_cal_set_txpwr(pwr_gain, EVM_DEFUALT_BLE_RATE);
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();
 }
 
 void rwnx_cal_initial_calibration(void)
@@ -1801,9 +1807,9 @@ void rwnx_cal_set_txpwr(UINT32 pwr_gain, UINT32 grate)
             pcfg->pregain, pcfg->regb_28_31, pcfg->regc_8_11,pcfg->regc_4_7, pcfg->regc_0_3, 
             pcfg->rega_8_13, pcfg->rega_4_7);
         os_printf("Xtal C: %d\r\n", manual_cal_get_xtal());
-        os_printf("Mod :0x%x\r\n", bk7011_cal_dcormod_get());
     }
 
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
     BK7011RCBEKEN.REG0x52->bits.TXPREGAIN = gtx_pre_gain = pcfg->pregain;
     bk7011_rc_val[21] = BK7011RCBEKEN.REG0x52->value;
 
@@ -1814,7 +1820,7 @@ void rwnx_cal_set_txpwr(UINT32 pwr_gain, UINT32 grate)
     bk7011_trx_val[10] = BK7011TRXONLY.REG0xA->value ;
 
     BK7011TRX.REG0xB->bits.gctrlmod30 = pcfg->regb_28_31;
-    BK7011TRX.REG0xB->bits.dcorMod30 = bk7011_cal_dcormod_get();
+    //BK7011TRX.REG0xB->bits.dcorMod30 = bk7011_cal_dcormod_get();
     CAL_WR_TRXREGS(0xB);
     bk7011_trx_val[11] = BK7011TRXONLY.REG0xB->value ;
 
@@ -1823,16 +1829,24 @@ void rwnx_cal_set_txpwr(UINT32 pwr_gain, UINT32 grate)
     BK7011TRX.REG0xC->bits.dgainPA30 = pcfg->regc_8_11; 
     CAL_WR_TRXREGS(0xC);
     bk7011_trx_val[12] = BK7011TRXONLY.REG0xC->value ;    
+	CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();    
 }   
 
 void rwnx_cal_set_reg_mod_pa(UINT16 reg_mod, UINT16 reg_pa)
 {
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
+
     gtx_dcorMod = (INT32)reg_mod,
     gtx_dcorPA = (INT32)reg_pa;
-    BK7011TRXONLY.REG0xB->bits.dcorMod30 = gtx_dcorMod;
-    BK7011TRXONLY.REG0xC->bits.dcorPA30 = gtx_dcorPA;    
+
+    BK7011TRX.REG0xB->bits.dcorMod30 = gtx_dcorMod;
+    CAL_WR_TRXREGS(0xB);
+    
+    BK7011TRX.REG0xC->bits.dcorPA30 = gtx_dcorPA;  
+    CAL_WR_TRXREGS(0xC);
     bk7011_trx_val[11] = BK7011TRXONLY.REG0xB->value;
     bk7011_trx_val[12] = BK7011TRXONLY.REG0xC->value; 
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();
 }
 #endif
 
@@ -1852,13 +1866,6 @@ void rwnx_cal_do_temp_detect(UINT16 cur_val, UINT16 thre, UINT16 *last)
 
 void rwnx_tx_cal_save_cal_result(void)
 {
-    if (!bk7011_is_rfcali_mode_auto())
-    {
-        // Manual calibration not used PA & MOD, but use pre_gain
-        gtx_dcorMod = 0x8;
-        gtx_dcorPA = 0x8;
-    }
-    
     #if CFG_USE_TEMPERATURE_DETECT
     manual_cal_tmp_pwr_init_reg(gtx_dcorMod, gtx_dcorPA);
     #endif  // CFG_USE_TEMPERATURE_DETECT
@@ -2425,19 +2432,34 @@ int bk7011_is_rfcali_mode_auto(void)
     return (g_cali_mode == CALI_MODE_AUTO) ? 1 : 0;
 }
 
-void bk7011_set_rf_config_tssithred(int tssi_thred)
+void bk7011_set_rf_config_tssithred_b(int tssi_thred_b)
 {
-    if((tssi_thred < 0) || (tssi_thred > 0xff))
+    if((tssi_thred_b < 0) || (tssi_thred_b > 0xff))
     {
-        os_printf("tssi range:0-255, %d\r\n", tssi_thred);
+        os_printf("b tssi range:0-255, %d\r\n", tssi_thred_b);
         return;
     }
-        
-    gtx_tssi_thred = tssi_thred;
 
-    save_info_item(RF_CFG_TSSI_ITEM, (UINT8 *)&gtx_tssi_thred, NULL, NULL);
+    gtx_tssi_thred_b = tssi_thred_b;
 
-    os_printf("set tssi_thred:0x%x\r\n", gtx_tssi_thred);
+    save_info_item(RF_CFG_TSSI_B_ITEM, (UINT8 *)&gtx_tssi_thred_b, NULL, NULL);
+
+    os_printf("set b_tssi_thred:%d\r\n", gtx_tssi_thred_b);
+}
+
+void bk7011_set_rf_config_tssithred_g(int tssi_thred_g)
+{
+    if((tssi_thred_g < 0) || (tssi_thred_g > 0xff))
+    {
+        os_printf("g tssi range:0-255, %d\r\n", tssi_thred_g);
+        return;
+    }
+
+    gtx_tssi_thred_g = tssi_thred_g;
+
+    save_info_item(RF_CFG_TSSI_ITEM, (UINT8 *)&gtx_tssi_thred_g, NULL, NULL);
+
+    os_printf("set g_tssi_thred:%d\r\n", gtx_tssi_thred_g);
 }
 
 void bk7011_get_txpwr_config_reg(void)
@@ -2446,10 +2468,15 @@ void bk7011_get_txpwr_config_reg(void)
 
     if(get_info_item(RF_CFG_TSSI_ITEM, (UINT8 *)&tssi_thred, NULL, NULL))
     {
-        gtx_tssi_thred = tssi_thred;
+        gtx_tssi_thred_g = tssi_thred;
+    }
+
+    if(get_info_item(RF_CFG_TSSI_B_ITEM, (UINT8 *)&tssi_thred, NULL, NULL))
+    {
+        gtx_tssi_thred_b = tssi_thred;
     }
     
-    os_printf("tssi_th:0x%x\r\n", gtx_tssi_thred);
+    os_printf("tssi_th:b-%d, g-%d\r\n", gtx_tssi_thred_b, gtx_tssi_thred_g);
 }
 
 void bk7011_tx_cal_en(void)
@@ -2482,7 +2509,7 @@ static INT32 bk7011_get_tx_output_power(void)
     if(gtx_power_cal_mode == TX_WANTED_POWER_CAL) //
     {
 
-        tssioutpower = tssioutpower / 4 - gtx_tssi_thred - gav_tssi_temp;
+        tssioutpower = tssioutpower / 4 - TSSI_POUT_TH - gav_tssi_temp;
     }
     else if(gtx_power_cal_mode == TX_IQ_POWER_CAL) //
     {
@@ -2540,23 +2567,30 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
     BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 1;
     if (gtx_power_cal_mode == TX_WANTED_POWER_CAL)
     {
-        BK7011TRX.REG0xD->value = TRX_REG_0XD_VAL;
-        BK7011TRX.REG0xA->value = TRX_REG_0XA_VAL;//by yiming 20170315;
-        BK7011TRX.REG0xB->value = TRX_REG_0XB_VAL;//;
-        BK7011TRX.REG0xC->value = TRX_REG_0XC_VAL;//;
-        
-        BK7011TRX.REG0xC->bits.dgainPA30 = 2;//;
-        BK7011TRX.REG0xC->bits.dgainbuf30 = 2;//;
-        
-        BK7011TRX.REG0xD->bits.entxsw = 0;
-        BK7011TRX.REG0xD->bits.enrxsw = 1;
-        
-	    CAL_WR_TRXREGS(0xC);
+        BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x280;///0x200;
+        BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x280;///0x200;
+        BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 1;
+        BK7011RCBEKEN.REG0x0->bits.forceenable = 1;  ///add
+
+        BK7011TRX.REG0xD->value = 0xDDF90339;///TRX_REG_0XD_VAL;
+        BK7011TRX.REG0xA->value = 0x036F2075;///TRX_REG_0XA_VAL;//by yiming 20170315;
+        BK7011TRX.REG0xB->value = 0xA7248F37;///TRX_REG_0XB_VAL;//;
+        BK7011TRX.REG0xC->value = 0x00228765;///TRX_REG_0XC_VAL;//;
+        BK7011RCBEKEN.REG0x52->bits.TXPREGAIN = 0x07;
+        CAL_WR_TRXREGS(0xB);
+        BK7011TRX.REG0xC->bits.dgainPA30 = 0;   ///2
+        BK7011TRX.REG0xC->bits.dgainbuf30 = 0;  ///2
+
+        BK7011TRX.REG0xD->bits.entxsw = 1;
+        BK7011TRX.REG0xD->bits.enrxsw = 0;
+
+        CAL_WR_TRXREGS(0xC);
         BK7011TRX.REG0x0->bits.TSSIsel = 1;
         BK7011TRX.REG0x0->bits.enDCcal = 0;
         BK7011TRX.REG0x0->bits.enIQcal = 0;
         BK7011TRX.REG0x0->bits.enPcal = 1;
-        BK7011TRX.REG0x0->bits.tssi_selrange = 0;           
+        BK7011TRX.REG0x0->bits.tssi_selrange = 0; 
+        BK7011TRX.REG0x0->bits.PcalATT = 2;
     }
     else if(gtx_power_cal_mode == TX_IQ_POWER_CAL)
     {
@@ -2564,7 +2598,7 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
         BK7011TRX.REG0xA->value = TRX_REG_0XA_VAL;//0x036F0757;//by yiming 20170315;
         BK7011TRX.REG0xB->value = TRX_REG_0XB_VAL;//0x17248757;//;
         BK7011TRX.REG0xC->value = TRX_REG_0XC_VAL;//0x05228765;//;
-	    CAL_WR_TRXREGS(0xC);
+        CAL_WR_TRXREGS(0xC);
         
         bk7011_set_tx_pa(gi_gain_tx_pa_dgainPA30, gi_gain_tx_pa_dgainbuf30, 0, 8);
         BK7011TRX.REG0x0->bits.TSSIsel = 0;
@@ -2579,7 +2613,7 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
         BK7011TRX.REG0xA->value = TRX_REG_0XA_VAL;//0x036F0757;//by yiming 20170315;
         BK7011TRX.REG0xB->value = TRX_REG_0XB_VAL;//0x17248757;//;
         BK7011TRX.REG0xC->value = TRX_REG_0XC_VAL;//0x05228765;//;
-	    CAL_WR_TRXREGS(0xC);
+        CAL_WR_TRXREGS(0xC);
         bk7011_set_tx_pa(gi_gain_tx_loopback_pa_dgainPA30, gi_gain_tx_loopback_pa_dgainbuf30, 0, 8);
         BK7011TRX.REG0x0->bits.TSSIsel = 0;
         BK7011TRX.REG0x0->bits.enDCcal = 0;
@@ -2587,8 +2621,15 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
         BK7011TRX.REG0x0->bits.enPcal = 0;
         BK7011TRX.REG0x0->bits.tssi_selrange = 0;        
     }
-    
-    BK7011TRX.REG0x0->bits.tssi_statectrl = 1;
+
+    if (gtx_power_cal_mode == TX_WANTED_POWER_CAL)
+    {
+        BK7011TRX.REG0x0->bits.tssi_statectrl = 0;
+    }
+    else
+    {
+        BK7011TRX.REG0x0->bits.tssi_statectrl = 1;
+    }
     BK7011TRX.REG0xD->bits.entssi = 1;
     BK7011TRX.REG0xD->bits.entssiadc = 1;//20170503 enable TSSI
 //    BK7011TRX.REG0x0->bits.tssi_selrange = 1;
@@ -2619,19 +2660,45 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
 
     if (gtx_power_cal_mode == TX_WANTED_POWER_CAL)
     {
+        /*
         BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x280;//gconst_pout;
         BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x280;//gconst_pout;
         BK7011TRX.REG0xC->value = TRX_REG_0XC_VAL;//;
-        
+
         BK7011TRX.REG0xC->bits.dgainPA30 = 2;//;
         BK7011TRX.REG0xC->bits.dgainbuf30 = 2;//;
-        
+
         CAL_WR_TRXREGS(0xC);
         BK7011TRX.REG0x0->bits.TSSIsel = 1;
         BK7011TRX.REG0x0->bits.enDCcal = 0;
         BK7011TRX.REG0x0->bits.enIQcal = 0;
         BK7011TRX.REG0x0->bits.enPcal = 1;
-        BK7011TRX.REG0x0->bits.tssi_selrange = 0;        
+        BK7011TRX.REG0x0->bits.tssi_selrange = 0;  
+        */
+        BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x280;///0x200;
+        BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x280;///0x200;
+        BK7011RCBEKEN.REG0x0->bits.forceenable = 1;  ///add
+
+        // BK7011TRX.REG0xD->value = 0xDDF90339;///TRX_REG_0XD_VAL;
+        BK7011TRX.REG0xA->value = 0x036F2075;///TRX_REG_0XA_VAL;//by yiming 20170315;
+        BK7011TRX.REG0xB->value = 0xA7248F37;///TRX_REG_0XB_VAL;//;
+        BK7011TRX.REG0xC->value = 0x00228765;///TRX_REG_0XC_VAL;//;
+
+        CAL_WR_TRXREGS(0xC);
+        CAL_WR_TRXREGS(0xB);
+        //BK7011RCBEKEN.REG0x52->bits.TXPREGAIN = 0x07;  ///ADD
+
+        BK7011TRX.REG0xD->bits.entxsw = 1;
+        BK7011TRX.REG0xD->bits.enrxsw = 0;
+
+        //CAL_WR_TRXREGS(0xD);
+
+        BK7011TRX.REG0x0->bits.TSSIsel = 1;
+        BK7011TRX.REG0x0->bits.enDCcal = 0;
+        BK7011TRX.REG0x0->bits.enIQcal = 0;
+        BK7011TRX.REG0x0->bits.enPcal = 1;
+        BK7011TRX.REG0x0->bits.tssi_selrange = 0; 
+        BK7011TRX.REG0x0->bits.PcalATT = 2;
     }
     else if(gtx_power_cal_mode == TX_IQ_POWER_CAL)
     {
@@ -2660,7 +2727,15 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
         BK7011TRX.REG0x0->bits.tssi_selrange = 0;
     }
 
-    BK7011TRX.REG0x0->bits.tssi_statectrl = 1;
+    ///BK7011TRX.REG0x0->bits.tssi_statectrl = 1;
+    if (gtx_power_cal_mode == TX_WANTED_POWER_CAL)
+    {
+        BK7011TRX.REG0x0->bits.tssi_statectrl = 0;
+    }
+    else
+    {
+        BK7011TRX.REG0x0->bits.tssi_statectrl = 1;
+    }
 //    BK7011TRX.REG0x0->bits.enPcaliGm = 0;
     BK7011TRX.REG0xF->bits.tssi_cal_en = 1;
     BK7011TRX.REG0xC->bits.dcorPA30 = 8;
@@ -2716,7 +2791,6 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
         CAL_WR_TRXREGS(0xB);
         cal_delay(CAL_TX_NUM);//first sar dac delay needs double time
         tssilow = bk7011_get_tx_output_power();
-
 
         BK7011TRX.REG0xB->bits.dcorMod30 = high;
         CAL_WR_TRXREGS(0xB);
@@ -2952,6 +3026,259 @@ INT32 bk7011_cal_tx_output_power(INT32 *val)
 #endif
 
     return (gold_index);
+}
+
+static INT32 bk7011_get_tx_tssi(INT32 tssi_thred, INT32 tssi_offset)
+{
+    int i;
+    INT32 tssioutpower = 0;
+
+    for (i = 0; i < 4; i++)
+    {
+        cal_delay(1 * gst_sar_adc);
+        tssioutpower += BK7011RCBEKEN.REG0x54->bits.TSSIRD;
+    }
+
+    tssioutpower = tssioutpower / 4 - tssi_thred - tssi_offset;
+    
+	//bk_printf("tssioutpower:%d\n",tssioutpower);
+
+    //tssioutpower = abs(tssioutpower);
+ 
+    return tssioutpower;
+}
+
+#define AUTO_CAL_PTR        null_prf
+#define AUTO_CAL_NPTR       null_prf
+static UINT32 bk7011_do_atuo_tx_cal(UINT32 channel, UINT32 rate, INT32 tssi_thred, INT32 tssi_offset)
+{
+    // calc tssi
+    INT32 tssi_cur = 0, tssi_prev = 0;
+    UINT32 pwr_idx = 0, pwr_idx_prev = 0;
+    UINT32 pwr_idx_min, tssi_abs_min;
+
+    if((channel < 1) || (channel > 14))
+    {
+        AUTO_CAL_NPTR("wrong channel:%d\r\n", channel);
+        return 16;
+    }
+    else
+    {
+        AUTO_CAL_PTR("\r\n ******** do chan:%d ********\r\n", channel);
+        if(channel != 14)
+        {
+            channel = 12 + 5 * (channel - 1);
+        }
+        else
+            channel = 84;
+    }
+
+    // do for channel
+    BK7011TRX.REG0x5->bits.chspi = channel; 
+    CAL_WR_TRXREGS(0x5);
+    delay100us(1);
+
+    pwr_idx_min = 31;
+    tssi_abs_min = 255;
+    pwr_idx = 16;
+    
+    rwnx_cal_set_txpwr(pwr_idx, rate);
+    tssi_prev = tssi_cur = bk7011_get_tx_tssi(tssi_thred, tssi_offset);
+    tssi_abs_min = abs(tssi_cur);
+
+    AUTO_CAL_NPTR("init tssi:%d, idx:%d\r\n", tssi_prev, pwr_idx);
+
+    while(tssi_cur != 0) 
+    {
+        pwr_idx_prev = pwr_idx;
+        tssi_prev = tssi_cur;
+        
+        if(tssi_cur > 0)
+        {
+            if(pwr_idx == 0)
+            {
+                pwr_idx = pwr_idx_min;
+                AUTO_CAL_NPTR("res 1: idx:%d\r\n", pwr_idx);
+                break;
+            }
+            else
+            {
+                pwr_idx--;
+            }
+        }
+        else
+        {
+            if(tssi_cur < 0)
+            {
+                if(pwr_idx == 31)
+                {
+                    pwr_idx = pwr_idx_min;
+                    AUTO_CAL_NPTR("res 2: idx:%d\r\n", pwr_idx);
+                    break;
+                }
+                else
+                {
+                    pwr_idx++;
+                }
+            }
+        }
+        
+        rwnx_cal_set_txpwr(pwr_idx, rate);
+        tssi_cur = bk7011_get_tx_tssi(tssi_thred, tssi_offset);
+        
+        AUTO_CAL_NPTR("tssi:%d:%d, idx:%d:%d\r\n", 
+            tssi_prev, tssi_cur, pwr_idx_prev, pwr_idx);
+
+        if(((tssi_cur > 0) && (tssi_prev < 0)) 
+            || ((tssi_cur < 0) && (tssi_prev > 0)))
+        {
+            if(abs(tssi_cur) == abs(tssi_prev))
+            {
+                pwr_idx = (pwr_idx_prev < pwr_idx)? pwr_idx_prev : pwr_idx;
+            }
+            else
+            {
+                pwr_idx = (abs(tssi_cur) <= abs(tssi_prev)) ? pwr_idx : pwr_idx_prev;
+            }
+            AUTO_CAL_NPTR("res 3: idx:%d\r\n", pwr_idx);
+            break;
+        }
+
+        if(tssi_abs_min > abs(tssi_cur))
+        {
+            tssi_abs_min = abs(tssi_cur);
+            pwr_idx_min = pwr_idx;
+            AUTO_CAL_NPTR("bakup min: %d:%d\r\n", tssi_abs_min, pwr_idx_min);
+        }
+
+        if(tssi_cur == 0)
+        {
+            AUTO_CAL_NPTR("res 4: idx:%d\r\n", pwr_idx);
+        }
+    }
+
+    AUTO_CAL_PTR("******** end idx:%d ********\r\n", pwr_idx);
+
+    return pwr_idx;
+}
+
+INT32 bk7011_cal_auto_tx_power(void)
+{
+    extern UINT32 g_dif_g_n40;
+    extern void manual_cal_11b_2_ble(void);
+    // tx sinewave setting
+    BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 1;
+    BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x200;
+    BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x200;
+    BK7011RCBEKEN.REG0x0->bits.forceenable = 1;
+
+
+    // tx chanin gain setting
+    BK7011RCBEKEN.REG0x52->bits.TXPREGAIN = 0x07;
+    BK7011TRX.REG0xA->value = 0x036F2075;///TRX_REG_0XA_VAL;//by yiming 20170315;
+    BK7011TRX.REG0xB->value = 0xA7248F37;///TRX_REG_0XB_VAL;//;
+    BK7011TRX.REG0xC->value = 0x00228765;///TRX_REG_0XC_VAL;//;
+    CAL_WR_TRXREGS(0xA);
+    CAL_WR_TRXREGS(0xB);
+    CAL_WR_TRXREGS(0xC);
+
+
+    // peak detector settings
+    BK7011TRX.REG0xD->value = 0xD9FF0338;
+    CAL_WR_TRXREGS(0xD);
+
+    //BK7011TRX.REG0x0->bits.TSSIsel = 1;
+    //BK7011TRX.REG0x0->bits.enDCcal = 0;
+    //BK7011TRX.REG0x0->bits.enIQcal = 0;
+    //BK7011TRX.REG0x0->bits.enPcal = 1;
+    //BK7011TRX.REG0x0->bits.tssi_statectrl = 0;
+	//BK7011TRX.REG0x0->bits.PcalATT = 2;
+    BK7011TRX.REG0x0->value = 0x0003a24e;
+    CAL_WR_TRXREGS(0x0);
+
+    BK7011TRX.REG0xD->bits.entssi = 1;
+    BK7011TRX.REG0xD->bits.entssiadc = 1;
+    BK7011TRX.REG0xD->bits.entxsw = 1;
+    BK7011TRX.REG0xD->bits.enrxsw = 0;
+    CAL_WR_TRXREGS(0xD);
+
+    BK7011TRX.REG0xF->bits.tssi_cal_en = 1;
+    CAL_WR_TRXREGS(0xF);
+
+
+    // Set tssi offset
+    INT32 tssi_offset;
+    BK7011TRX.REG0xC->bits.dgainPA30 = 0;
+    BK7011TRX.REG0xC->bits.dgainbuf30 = 0;
+    CAL_WR_TRXREGS(0xC);
+
+    tssi_offset = 0;
+    for(int cnt = 0; cnt < GET_AV_TSSI_CNT; cnt++)
+    {
+        cal_delay(1 * gst_sar_adc);
+        tssi_offset += BK7011RCBEKEN.REG0x54->bits.TSSIRD;
+    }
+    tssi_offset /= GET_AV_TSSI_CNT;//Get small power tssi of each sample to remove tssi dc
+    AUTO_CAL_PTR("get tssi offset:%d\r\n", tssi_offset);
+
+    BK7011TRX.REG0xC->bits.dgainPA30 = 7;
+    BK7011TRX.REG0xC->bits.dgainbuf30 = 6;
+    CAL_WR_TRXREGS(0xC);
+
+    UINT32 channel, rate, pwr_idx, tssi_thred;
+    
+    rate = EVM_DEFUALT_RATE;
+    tssi_thred = gtx_tssi_thred_g;//125;
+    BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x260;
+    BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x260;
+
+    AUTO_CAL_PTR("\r\n do 11g: tssi_thred:%d\r\n", tssi_thred);
+    channel = 1;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+    pwr_idx = (pwr_idx > g_dif_g_n40) ? (pwr_idx - g_dif_g_n40) : 0;
+    manual_cal_save_txpwr(135, 3, pwr_idx);
+
+    channel = 7;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+    pwr_idx = (pwr_idx > g_dif_g_n40) ? (pwr_idx - g_dif_g_n40) : 0;
+    manual_cal_save_txpwr(135, 7, pwr_idx);
+    
+    channel = 13;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+    pwr_idx = (pwr_idx > g_dif_g_n40) ? (pwr_idx - g_dif_g_n40) : 0;
+    manual_cal_save_txpwr(135, 11, pwr_idx);
+    AUTO_CAL_PTR("end 11g: tssi_thred:%d\r\n", tssi_thred);
+
+
+    rate = EVM_DEFUALT_B_RATE;
+    tssi_thred = gtx_tssi_thred_b;
+    BK7011RCBEKEN.REG0x4C->bits.ICONSTANT = 0x2c0;
+    BK7011RCBEKEN.REG0x4C->bits.QCONSTANT = 0x2c0;
+    AUTO_CAL_PTR("\r\n do 11b: tssi_thred:%d\r\n", tssi_thred);
+    channel = 1;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+
+    channel = 7;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+    
+    channel = 13;
+    pwr_idx = bk7011_do_atuo_tx_cal(channel, rate, tssi_thred, tssi_offset);
+    manual_cal_save_txpwr(rate, channel, pwr_idx);
+    AUTO_CAL_PTR("end 11b: tssi_thred:%d\r\n", tssi_thred);
+
+    manual_cal_11b_2_ble();
+    manual_cal_fitting_txpwr_tab();
+
+    // exit, recover setting
+    BK7011RCBEKEN.REG0x0->bits.forceenable = 1;
+    BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 0;
+    
+    return 0;
 }
 
 void bk7011_micopwr_config_tssi_read_prepare(void)
@@ -4944,6 +5271,7 @@ void bk7011_set_tx_after_cal(void)
     BK7011RCBEKEN.REG0x1C->bits.FRXON = 0;
     BK7011RCBEKEN.REG0x1C->bits.FTXON = 1;
     BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 0;
+	BK7011RCBEKEN.REG0x0->bits.forceenable = 0;
     //BK7011ICU.REG0x1->bits.txon = 1;
     //BK7011ICU.REG0x1->bits.rxon = 0;
 }
@@ -4959,6 +5287,7 @@ void bk7011_set_rx_after_cal(void)
     BK7011RCBEKEN.REG0x1C->bits.FRXON = 1;
     BK7011RCBEKEN.REG0x1C->bits.FTXON = 0;
     BK7011RCBEKEN.REG0x4C->bits.TESTPATTERN = 0;
+    BK7011RCBEKEN.REG0x0->bits.forceenable = 0;
 
     BK7011TRX.REG0xE->value = 0xDA01BCF0;
     CAL_WR_TRXREGS(0xE);
@@ -5170,10 +5499,30 @@ void flash_test(void)
 }
 #endif
 
+UINT32 bk7011_set_ldo_manual(void)
+{
+    UINT32 param, val, param_bak;
+    param_bak = param = sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_BIAS_REG_READ, &param);
+    val = (param >> PARAM_LDO_VAL_MANUAL_POSI) & PARAM_LDO_VAL_MANUAL_MASK;
+
+    val = (val > 2)? (val - 2) : 0;
+    param &= ~(PARAM_LDO_VAL_MANUAL_MASK << PARAM_LDO_VAL_MANUAL_POSI);
+    param |= ((val & PARAM_LDO_VAL_MANUAL_MASK) << PARAM_LDO_VAL_MANUAL_POSI);
+    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_BIAS_REG_WRITE, &param);
+
+    return param_bak;
+}
+
+void bk7011_recover_ldo_manual(UINT32 param)
+{
+    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_BIAS_REG_WRITE, &param);
+}
+
 void sctrl_dpll_int_open(void);
 void calibration_main(void)
 {
     INT32 goldval[32] = {0};
+    UINT32 param_bak, ldoadda_bak;
 
     bk7011_get_rfcali_mode();
     bk7011_get_txpwr_config_reg();
@@ -5186,6 +5535,11 @@ void calibration_main(void)
     BK7011RCBEKEN.REG0x4C->bits.TXCOMPDIS = 0;    
     bk7011_cal_ready();
     bk7011_cal_bias();
+
+    // setting for tssi stable
+    param_bak = bk7011_set_ldo_manual();
+    ldoadda_bak = BK7011TRX.REG0x12->bits.ldoadda;
+    rwnx_cal_set_reg_adda_ldo(0);
 
     //bk7011_doubler_cal();
     //bk7011_band_cal();
@@ -5263,33 +5617,14 @@ void calibration_main(void)
     CAL_WR_TRXREGS(0x5);
     delay100us(1);//delay 100us for RFPLL
     
-    
     bk7011_cal_bias();
 
-    gtx_power_cal_mode = TX_WANTED_POWER_CAL;
-
-    // do three times on different channel
-    BK7011TRX.REG0x5->bits.chspi = 12; // 2412
-    CAL_WR_TRXREGS(0x5);
-    delay100us(1);//delay 100us for RFPLL	
-    bk7011_cal_tx_output_power(goldval);  // Actual Power cal.     
-    bk7011_cal_dcormod_save_base(gtx_dcorMod);
-
-    BK7011TRX.REG0x5->bits.chspi = 42; // 2442
-    CAL_WR_TRXREGS(0x5);
-    delay100us(1);//delay 100us for RFPLL	
-    bk7011_cal_tx_output_power(goldval);  // Actual Power cal.     
-    bk7011_cal_dcormod_save_base(gtx_dcorMod);
-
-    BK7011TRX.REG0x5->bits.chspi = 72; // 2472
-    CAL_WR_TRXREGS(0x5);
-    delay100us(1);//delay 100us for RFPLL	
-    bk7011_cal_tx_output_power(goldval);  // Actual Power cal.     
-    bk7011_cal_dcormod_save_base(gtx_dcorMod);
-
-    bk7011_cal_dcormod_do_fitting();
-    // do three times on different channel
-
+    if(bk7011_is_rfcali_mode_auto())
+    {
+        bk7011_cal_auto_tx_power();
+    }
+    // set pa & mod to 8 8 ?
+    gtx_dcorPA = gtx_dcorMod = 8;
 
     bk7011_set_tx_after_cal();
     rwnx_tx_cal_save_cal_result();//by yiming 20170315
@@ -5363,6 +5698,10 @@ void calibration_main(void)
 #endif
     bk7011_cal_dpll();
     sctrl_dpll_int_open();
+
+    // recover for tssi stable
+    bk7011_recover_ldo_manual(param_bak);
+    rwnx_cal_set_reg_adda_ldo(ldoadda_bak);
 /*	
     gtx_power_cal_mode = TX_WANTED_POWER_CAL;
     cpu_delay(100);
@@ -5418,16 +5757,20 @@ void do_calibration_in_temp_dect(void)
 UINT32 dgainpga = 0;
 void turnoff_PA_in_temp_dect(void)
 {
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
     dgainpga = BK7011TRXONLY.REG0xC->bits.dgainpga;
     BK7011TRX.REG0xC->bits.dgainpga = 0;
 
     CAL_WR_TRXREGS(0xC);    
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();
 }
 
 void turnon_PA_in_temp_dect(void)
 {
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
     BK7011TRX.REG0xC->bits.dgainpga = dgainpga;
-    CAL_WR_TRXREGS(0xC);   
+    CAL_WR_TRXREGS(0xC);
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();
 }
 
 void bk7011_la_sample_print(UINT32 isrx)
@@ -5488,28 +5831,43 @@ void bk7011_la_sample_print(UINT32 isrx)
 
 #if CFG_SUPPORT_RTT
 #include "str_pub.h"
-static int rfcali_cfg_tssi(int argc, char **argv)
+static int rfcali_cfg_tssi_b(int argc, char **argv)
 {
-    int tssi_thred;
+    int tssi_thred_b;
 
     if(argc != 2)
     {
-        os_printf("rfcali_cfg_tssi 0-255\r\n");
+        os_printf("rfcali_cfg_tssi 0-255(for b)\r\n");
         return 0;
     }
     
-    tssi_thred = os_strtoul(argv[1], NULL, 10);
-    
-    if((tssi_thred < 0) || (tssi_thred > 0xff))
-    {
-        os_printf("tssi range:0-255, %d\r\n", tssi_thred);
-        return 0;
-    }
+    tssi_thred_b = os_strtoul(argv[1], NULL, 10);
 
-    bk7011_set_rf_config_tssithred(tssi_thred);
+    os_printf("cmd set tssi b_thred:%d\r\n", tssi_thred_b);
+
+    bk7011_set_rf_config_tssithred_b(tssi_thred_b);
     return 0; 
 }
-FINSH_FUNCTION_EXPORT_ALIAS(rfcali_cfg_tssi, __cmd_rfcali_cfg_tssi, rfcali cfg tssi);
+FINSH_FUNCTION_EXPORT_ALIAS(rfcali_cfg_tssi_b, __cmd_rfcali_cfg_tssi_b, rfcali cfg tssi);
+
+static int rfcali_cfg_tssi_g(int argc, char **argv)
+{
+    int tssi_thred_g;
+
+    if(argc != 2)
+    {
+        os_printf("rfcali_cfg_tssi 0-255(for b)\r\n");
+        return 0;
+    }
+    
+    tssi_thred_g = os_strtoul(argv[1], NULL, 10);
+
+    os_printf("cmd set tssi g_thred:%d\r\n", tssi_thred_g);
+
+    bk7011_set_rf_config_tssithred_g(tssi_thred_g);
+    return 0; 
+}
+FINSH_FUNCTION_EXPORT_ALIAS(rfcali_cfg_tssi_g, __cmd_rfcali_cfg_tssi_g, rfcali cfg tssi);
 
 static int rfcali_cfg_rate_dist(int argc, char **argv)
 {
@@ -5567,84 +5925,16 @@ static int rfcali_cfg_mode(int argc, char **argv)
     return 0; 
 }
 FINSH_FUNCTION_EXPORT_ALIAS(rfcali_cfg_mode, __cmd_rfcali_cfg_mode, rfcali cfg mode);
+
+static int rfcali_show_data(int argc, char **argv)
+{
+    manual_cal_show_txpwr_tab();
+    
+    return 0; 
+}
+FINSH_FUNCTION_EXPORT_ALIAS(rfcali_show_data, __cmd_rfcali_show_data, rfcali show data);
+
 #endif
-
-UINT8 gtx_dcorMod_tab[14] = {0};
-void bk7011_cal_dcormod_show(void)
-{
-    os_printf("\r\n dcormod tab:\r\n");
-    for(int i=0; i<14; i++) {
-        os_printf("ch:%2d: mod:%02x\r\n", i+1, gtx_dcorMod_tab[i]);
-    }
-}
-
-static void bk7011_cal_dcormod_save_base(INT32 mod)
-{
-    UINT32 channel = BK7011TRXONLY.REG0x5->bits.chspi;
-    
-    if(channel < 12)
-        channel = 1;
-    else
-        channel = (channel - 7)/5;
-    
-    if(channel > 14)
-        channel = 14;
-    
-    if((channel == 1) || (channel == 7) || (channel == 13))
-    {
-        if((mod >= 0) && (mod <= 15))
-        {
-            gtx_dcorMod_tab[channel-1] = mod;
-        }
-        else
-        {
-            os_printf("save base failed:ch:%d, mod:%x\r\n", channel, mod);
-        }
-    }
-}
-
-static void bk7011_cal_dcormod_do_fitting(void)
-{
-    UINT8 mod_ch;
-
-    // ch4, use ch1 & ch7
-    mod_ch = gtx_dcorMod_tab[0] + gtx_dcorMod_tab[6];
-    gtx_dcorMod_tab[3] = mod_ch >> 1;
-
-    // ch10, use ch7 & ch13
-    mod_ch = gtx_dcorMod_tab[6] + gtx_dcorMod_tab[12];
-    gtx_dcorMod_tab[9] = mod_ch >> 1;
-
-    mod_ch = gtx_dcorMod_tab[0];
-    for(int i=1; i<14; i++)
-    {
-        // ch 1 4 7 10 13
-        if((i == 0) || (i == 3) || (i == 6) || (i == 9) || (i == 12))
-            mod_ch = gtx_dcorMod_tab[i];
-        else
-            gtx_dcorMod_tab[i] = mod_ch;
-    }
-}
-
-UINT8 bk7011_cal_dcormod_get(void)
-{
-    if(bk7011_is_rfcali_mode_auto())
-    {
-        UINT32 channel = BK7011TRXONLY.REG0x5->bits.chspi;
-        
-        if(channel < 12)
-            channel = 1;
-        else
-            channel = (channel - 7)/5;
-        
-        if(channel > 14)
-            channel = 14;
-
-        return gtx_dcorMod_tab[channel-1];
-    }
-    else
-        return gtx_dcorMod;
-}
 
 #else  /* CFG_SUPPORT_CALIBRATION */
 /*INT32 rwnx_cal_load_trx_rcbekn_reg_val(void)

@@ -80,7 +80,7 @@ typedef enum{
 }TXSTRUCT;
 
 #define DEFAULT_TXID_ID           (12345678)
-#define DEFAULT_TXID_THERMAL      (340) //180430,7231:315,7231U:340
+#define DEFAULT_TXID_THERMAL      (270) //180430,7231:315,7231U:340
 #define DEFAULT_TXID_CHANNEL      (22222222)
 #define DEFAULT_TXID_LPF_CAP_I    (0x80)
 #define DEFAULT_TXID_LPF_CAP_Q    (0x80)
@@ -373,6 +373,33 @@ INT8 g_def_dist_ble = TP_DIST_BLE;
 static int manual_cal_fit_txpwr_tab_n_20(UINT32 differ);
 static int manual_cal_fit_txpwr_tab_n_40(UINT32 differ);
 static void manual_cal_adjust_fitting(TXPWR_PTR ptr, UINT16 dist);
+
+void manual_cal_11b_2_ble(void)
+{
+    TXPWR_PTR tab_ptr = NULL;
+
+    tab_ptr = gtxpwr_tab_b;
+    
+    if((GET_TXPWR_FLAG(&tab_ptr[0]) == TXPWR_ELEM_INUSED)
+        &&(GET_TXPWR_FLAG(&tab_ptr[12]) == TXPWR_ELEM_INUSED))
+    {
+        unsigned char gain;
+        os_memcpy(gtxpwr_tab_ble, gtxpwr_tab_def_ble, sizeof(gtxpwr_tab_def_ble));
+        
+        gain = (GET_TXPWR_GAIN(&tab_ptr[0]) + GET_TXPWR_GAIN(&tab_ptr[12]))/2;
+        if((gain > 20) && (gain <= 31)){
+            gain -= 4;
+        }
+        else  if((gain >= 15) && (gain <= 20)){
+            gain -= 2;
+        }
+        else{
+            gain -= 0;
+        }
+        SET_TXPWR_GAIN(&gtxpwr_tab_ble[19],gain);
+        SET_TXPWR_FLAG(&gtxpwr_tab_ble[19],TXPWR_ELEM_INUSED);
+    }
+}
 
 static UINT8 manual_cal_calc_dist(UINT8 org, int dist)
 {                                
@@ -684,7 +711,6 @@ int manual_cal_get_txpwr(UINT32 rate, UINT32 channel, UINT32 bandwidth, UINT32 *
         }
     }
 
-    txpwr_tab_ptr = &gtxpwr_tab_ble[channel];
     org = GET_TXPWR_GAIN(txpwr_tab_ptr);
     
     *pwr_gain = manual_cal_calc_dist(org, dist);
@@ -693,7 +719,7 @@ int manual_cal_get_txpwr(UINT32 rate, UINT32 channel, UINT32 bandwidth, UINT32 *
      return 1;
 }
 
-extern INT32 gtx_tssi_thred;
+extern INT32 gtx_tssi_thred_b, gtx_tssi_thred_g;
 extern INT32 gtx_dcorMod;
 extern INT32 gtx_dcorPA;
 void manual_cal_show_txpwr_tab(void)
@@ -755,14 +781,12 @@ void manual_cal_show_txpwr_tab(void)
     MCAL_PRT("\r\nsys temper:%d\r\n", g_cur_temp);
     MCAL_PRT("sys xtal:%d\r\n", g_xtal);
 
-    MCAL_PRT("rate dist-- b:%d, g:%d, n40:%d, ble:%d, TSSI:%d\r\n", g_def_dist_b,
-        g_def_dist_g, g_def_dist_n40, g_def_dist_ble, gtx_tssi_thred);
+    MCAL_PRT("rate dist-- b:%d, g:%d, n40:%d, ble:%d, TSSI:b-%d,g-%d\r\n", g_def_dist_b,
+        g_def_dist_g, g_def_dist_n40, g_def_dist_ble, gtx_tssi_thred_b, gtx_tssi_thred_g);
 
-    MCAL_PRT("Mod: 0x%x, PA: 0x%x\r\n", bk7011_cal_dcormod_get(), gtx_dcorPA);
+    MCAL_PRT("Mod: 0x%x, PA: 0x%x\r\n", gtx_dcorMod, gtx_dcorPA);
     MCAL_PRT("rf calibration in auto mode: %s\r\n", 
         (bk7011_is_rfcali_mode_auto() == 1)? "yes" : "no");
-
-    bk7011_cal_dcormod_show();
 }
 
 TXPWR_IS_RD manual_cal_txpwr_tab_is_fitted(void)
@@ -995,7 +1019,7 @@ UINT32 manual_cal_fitting_txpwr_tab(void)
             flag |= 0x04;
             base = &tab_ptr[39];
         }
-        printf("0x%x\r\n", flag);
+        //os_printf("0x%x\r\n", flag);
         if(flag != 0x7)
         {
             // only ch19 do fit
@@ -1398,6 +1422,11 @@ UINT32 manual_cal_load_txpwr_tab_flash(void)
 	bk_logic_partition_t *pt = bk_flash_get_info(BK_PARTITION_RF_FIRMWARE);
 	#endif
 
+    if(bk7011_is_rfcali_mode_auto())
+    {
+        return 0;
+    }
+
     addr_start = manual_cal_search_txpwr_tab(TXPWR_TAB_TAB, pt->partition_start_addr);//TXPWR_TAB_FLASH_ADDR); 
     if(!addr_start) {
         MCAL_WARN("NO TXPWR_TAB_TAB found in flash\r\n");
@@ -1501,6 +1530,11 @@ UINT32 manual_cal_load_default_txpwr_tab(UINT32 is_ready_flash)
 
     // load dist first, don't care auto or manual mode
     manual_cal_get_rate_dist_for_txpwr();
+
+    if(bk7011_is_rfcali_mode_auto())
+    {
+        return 0;
+    }
 
     if(!(is_ready_flash & TXPWR_TAB_B_RD)) {
         os_memcpy(gtxpwr_tab_b, gtxpwr_tab_def_b, sizeof(gtxpwr_tab_def_b));

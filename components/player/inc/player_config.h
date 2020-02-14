@@ -1,67 +1,65 @@
-#ifndef PLAYER_CONFIG_H__
-#define PLAYER_CONFIG_H__
+/*
+ * File: player_config.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
+ */
+
+#ifndef __PLAYER_CONFIG_H__
+#define __PLAYER_CONFIG_H__
 
 #include <rtthread.h>
 
-/* Privated Packages of RealThread */
-
-#define PKG_USING_CODEC
-#define PKG_USING_CODEC_LATEST_VERSION
-#define PKG_USING_PLAYER
-#define PKG_PLAYER_MP3
-#define PKG_PLAYER_WAV
-#define PKG_PLAYER_AMR
-#define PKG_PLAYER_M4A
-#define PKG_USING_PLAYER_LATEST_VERSION
-
-#ifdef PKG_PLAYER_APP
-#define CONFIG_APP  1
-#endif
-#ifdef PKG_PLAYER_WAV
-#define CONFIG_WAV  1
-#endif
-#ifdef PKG_PLAYER_AMR
-#define CONFIG_AMR  1
+// CI: Auto build library
+#ifndef PLAYER_USING_DEBUG
+#define PLAYER_USING_DEBUG 0
 #endif 
-#ifdef PKG_PLAYER_MP3
-#define CONFIG_MP3  1
+
+/* Debug */ 
+#define DBG_ENABLE
+#if (PLAYER_USING_DEBUG == 1)
+#define DBG_LEVEL DBG_LOG
+#else
+#define DBG_LEVEL DBG_INFO
+#endif 
+#define DBG_COLOR
+#include <rtdbg.h>
+
+// Stream config
+#ifdef PLAYER_ENABLE_NET_STREAM
+#define CONFIG_NET_STREAM      1
 #endif
-#ifdef PKG_PLAYER_HELIX_AAC
-#define CONFIG_AAC  1
-#define RT_USING_HELIX_AAC
+#ifdef PLAYER_ENABLE_HTTP_STREAM
+#define CONFIG_HTTP_STREAM     1
 #endif
-#ifdef PKG_PLAYER_M4A
-#define CONFIG_M4A  1
+#ifdef PLAYER_ENABLE_HTTPS_STREAM
+#define CONFIG_HTTPS_STREAM    1
 #endif
-#ifdef PKG_PLAYER_FLAC
-#define CONFIG_FLAC 1
+#ifdef PLAYER_ENABLE_HLS_STREAM
+#define CONFIG_HLS_STREAM      1
 #endif
-#ifdef PKG_PLAYER_TS
-#define CONFIG_TS   1
+#ifdef PLAYER_ENABLE_PLS_STREAM
+#define CONFIG_PLS_STREAM      1
 #endif
-#ifdef PKG_PLAYER_OGG
-#define CONFIG_OGG	0
+#ifdef PLAYER_ENABLE_SESSION_STREAM
+#define CONFIG_SESSION_STREAM  1
+#endif
+#ifdef PLAYER_ENABLE_TTS_STREAM
+#define CONFIG_TTS_STREAM      1
 #endif
 
-#define CONFIG_NET_STREAM       1
-#define CONFIG_HTTP_STREAM      1
-#define CONFIG_HLS_STREAM       1
-#define CONFIG_SESSION_STREAM   1
+#define CONFIG_PLAYER_APP      1
+#define CONFIG_PLAYER_MEMALLOC 1 
 
-#define CONFIG_PLAYER_CHANNEL   0
-#define CONFIG_PLAYER_APP       1
+// 开启HLS功能时默认缓存为720K, 未开启时默认未96K
+#ifndef PLAYER_USING_NETSTREAM_BUFSZ
+#ifndef PLAYER_ENABLE_NET_STREAM
+#define PLAYER_USING_NETSTREAM_BUFSZ (96)
+#else
+#define PLAYER_USING_NETSTREAM_BUFSZ (720)
+#endif 
+#endif
 
-#define CONFIG_PLAYER_MEMALLOC  1
-
-/* 512kB buffer size for netstream if no airplay */
-#define NETSTREAM_BUFSZ         (128 * 1024)
-
-/* 720kB buffer size for netstream if airplay */
-//#define NETSTREAM_BUFSZ       (720 * 1024)
-
-/* 720kB buffer size for netstream if airplay */
-//#define NETSTREAM_BUFSZ       (128 * 1024)
-
+#define NETSTREAM_BUFSZ (PLAYER_USING_NETSTREAM_BUFSZ * 1024)
 
 #endif
 

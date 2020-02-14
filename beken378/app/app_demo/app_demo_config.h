@@ -13,17 +13,17 @@
 #define APP_DEMO_SOFTAP_DEF_NET_GW        "192.168.1.1"
 #define APP_DEMO_SOFTAP_DEF_CHANNEL       1   
 
-#define APP_DEMO_UDP_CMD_PORT             7090 
-#define APP_DEMO_UDP_IMG_PORT             7080 
+#define APP_DEMO_UDP_CMD_PORT             7080
+#define APP_DEMO_UDP_IMG_PORT             7070
 #define CMD_IMG_HEADER                    0x20
 #define CMD_START_IMG                     0x36
 #define CMD_STOP_IMG                      0x37
 #define CMD_START_OTA                     0x38
   
-#define APP_DEMO_TCP_SERVER_PORT          7050
-#define APP_DEMO_TCP_SERVER_PORT_VICOE    7040 
+#define APP_DEMO_TCP_SERVER_PORT          7060
+#define APP_DEMO_TCP_SERVER_PORT_VICOE    7040
 
-#define APP_DEMO_UDP_VOICE_PORT           7070 
+#define APP_DEMO_UDP_VOICE_PORT           7090
 #define CMD_VOICE_HEADER                  0x30
 #define CMD_VOICE_START                   0x66
 #define CMD_VOICE_STOP                    0x67

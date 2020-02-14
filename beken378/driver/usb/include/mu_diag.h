@@ -22,6 +22,7 @@
 #include "uart_pub.h"
 
 #define MUSB_DEBUG
+#undef  MUSB_DEBUG
 
 #ifdef MUSB_DEBUG
 #define MUSB_PRT                 os_printf
@@ -30,6 +31,7 @@
 #else
 #define MUSB_PRT                 os_null_printf
 #define MUSB_WPRT                os_null_printf
+#define MUSB_NPRT                os_null_printf
 #endif
 
 #define MUSB_DIAG_STRING(_bLevel, _pMsg)

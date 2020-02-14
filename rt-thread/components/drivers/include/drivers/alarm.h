@@ -81,6 +81,6 @@ void rt_alarm_update(rt_device_t dev, rt_uint32_t event);
 rt_err_t rt_alarm_delete(rt_alarm_t alarm);
 rt_err_t rt_alarm_start(rt_alarm_t alarm);
 rt_err_t rt_alarm_stop(rt_alarm_t alarm);
-void rt_alarm_system_init(void);
+int rt_alarm_system_init(void);
 
 #endif /* __ALARM_H__ */

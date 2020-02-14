@@ -34,13 +34,13 @@
 /*************************** CONSTANTS ****************************/
 #define MGC_FRAME_OFFSET                (1)
 #define MGC_MAX_POLLING_INTERVAL        (255)
-#define MGC_DRC_DELAY			         1000L	/* just a guess! */
+#define MGC_DRC_DELAY                    1000L    /* just a guess! */
 
 /** How many times to retry enumeration transfers */
-#define MGC_MAX_ENUM_RETRIES		    10
+#define MGC_MAX_ENUM_RETRIES            10
 
 /** How many times to retry enumeration of the root device on fatal errors */
-#define MGC_MAX_FATAL_RETRIES		    3
+#define MGC_MAX_FATAL_RETRIES            3
 
 /*
  * Enumeration state
@@ -52,9 +52,10 @@ enum MGC_EnumerationState
     MGC_EnumStateSetAddress,
     MGC_EnumStateGetMinDevice,
     MGC_EnumStateGetFullDevice,
-    MGC_EnumStateSizeConfigs,
-    MGC_EnumStateGetConfigs,
-    MGC_EnumStateGetDeviceStatus
+    MGC_EnumStateMinConfigs,
+    MGC_EnumStateGetFullConfigs,
+    MGC_EnumStateGetDeviceStatus,
+    MGC_EnumStateSetConfiguration
 };
 
 /***************************** TYPES ******************************/
@@ -64,14 +65,14 @@ enum MGC_EnumerationState
  */
 typedef struct
 {
-    uint32_t dwFrameTotal;	/* total frame time */
-    uint32_t dwControllerSetup;	/* controller overhead */
-    uint32_t dwInOverhead;	/* non-ISO IN overhead */
-    uint32_t dwOutOverhead;	/* non-ISO OUT overhead */
-    uint32_t dwIsoInOverhead;	/* ISO IN overhead */
-    uint32_t dwIsoOutOverhead;	/* ISO OUT overhead */
-    uint32_t dwPayloadScale;	/* scaling factor for payload-dependent term, * 10 */
-    uint32_t dwMaxPeriodic;	/* maximum allowable periodic allocation */
+    uint32_t dwFrameTotal;    /* total frame time */
+    uint32_t dwControllerSetup;    /* controller overhead */
+    uint32_t dwInOverhead;    /* non-ISO IN overhead */
+    uint32_t dwOutOverhead;    /* non-ISO OUT overhead */
+    uint32_t dwIsoInOverhead;    /* ISO IN overhead */
+    uint32_t dwIsoOutOverhead;    /* ISO OUT overhead */
+    uint32_t dwPayloadScale;    /* scaling factor for payload-dependent term, * 10 */
+    uint32_t dwMaxPeriodic;    /* maximum allowable periodic allocation */
 } MGC_BusTimeInfo;
 
 /*************************** FORWARDS *****************************/
@@ -182,18 +183,27 @@ const static uint8_t MGC_aGetConfigDescriptor[] =
     0, 0 /* allowed descriptor length */
 };
 
+/** SET_CONFIG(STRING) request template */
+const static uint8_t MGC_aSetConfiguration[] =
+{
+    MUSB_DIR_OUT | MUSB_TYPE_STANDARD | MUSB_RECIP_DEVICE,
+    MUSB_REQ_SET_CONFIGURATION,
+    0, 0,
+    0, 0,
+    0, 0 /* allowed descriptor length */
+};
 
 /*
  * Issue a USB set_address from stack's IRP.
  */
 static void MGC_HostSetDeviceAddress(void *pParam)
 {
-    uint32_t ret;
     MGC_Controller *pController = (MGC_Controller *)pParam;
     MGC_Port *pPort = pController->pPort;
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pEnumData->aSetupTx;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* program the address (some DRCs need it even in host mode) */
     pPort->bFuncAddr = 0;
     pPort->pfProgramBusState(pPort);
@@ -201,16 +211,12 @@ static void MGC_HostSetDeviceAddress(void *pParam)
     MUSB_PRT("[MGC] HostSetDeviceAddress\r\n");
     /* create and start request */
     MUSB_MemCopy(pEnumData->aSetupTx, MGC_aSetDeviceAddress, sizeof(MGC_aSetDeviceAddress));
-    pRequest->wValue = MUSB_SWAP16(pEnumData->bAddress);//此处已经把setup数据包中的地址设置为1了
+    pRequest->wValue = MUSB_SWAP16(pEnumData->bAddress); // 此处已经把setup数据包中的地址设置为1了
     pEnumData->Irp.pOutBuffer = pEnumData->aSetupTx;
     pEnumData->Irp.dwOutLength = sizeof(MGC_aSetDeviceAddress);
     pEnumData->bState = (uint8_t)MGC_EnumStateSetAddress;
 
-    ret = MUSB_StartControlTransfer(pPort->pInterfacePort, &(pEnumData->Irp));
-    if(ret)
-    {
-        MUSB_PRT("[MGC] HostSetDeviceAddress_failed\r\n");
-    }
+    MUSB_StartControlTransfer(pPort->pInterfacePort, &(pEnumData->Irp));
 }
 
 /*
@@ -225,7 +231,7 @@ void MGC_HostGetShortDescriptorZeroAddress(void *pParam)
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pEnumData->aSetupTx;
 
-    MUSB_PRT("[MGC] HostGetShortDescriptorZeroAddress\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetDeviceDescriptor,
                  sizeof(MGC_aGetDeviceDescriptor));
@@ -272,10 +278,9 @@ static void MGC_HostGetFullDescriptor(void *pParam)
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pEnumData->aSetupTx;
 
-    MUSB_PRT("[MGC] HostGetFullDescriptor\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
-    MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetDeviceDescriptor,
-                 sizeof(MGC_aGetDeviceDescriptor));
+    MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetDeviceDescriptor, sizeof(MGC_aGetDeviceDescriptor));
     pRequest->wLength = MUSB_SWAP16(sizeof(MUSB_DeviceDescriptor));
     pEnumData->Irp.pOutBuffer = pEnumData->aSetupTx;
     pEnumData->Irp.dwOutLength = sizeof(MGC_aGetDeviceDescriptor);
@@ -286,7 +291,7 @@ static void MGC_HostGetFullDescriptor(void *pParam)
 }
 
 /*
- * Get a config descriptor
+ * Get a configuration descriptor
  */
 static void MGC_HostGetConfig(void *pParam)
 {
@@ -295,10 +300,9 @@ static void MGC_HostGetConfig(void *pParam)
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pEnumData->aSetupTx;
 
-    MUSB_PRT("[MGC] HostGetConfig\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
-    MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetConfigDescriptor,
-                 sizeof(MGC_aGetConfigDescriptor));
+    MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetConfigDescriptor, sizeof(MGC_aGetConfigDescriptor));
     pEnumData->aSetupTx[2] = pEnumData->bIndex;
     pRequest->wLength = MUSB_SWAP16((uint16_t)pEnumData->Irp.dwInLength);
     pEnumData->Irp.pOutBuffer = pEnumData->aSetupTx;
@@ -307,11 +311,34 @@ static void MGC_HostGetConfig(void *pParam)
     MUSB_StartControlTransfer(pPort->pInterfacePort, &(pEnumData->Irp));
 }
 
+/*
+ * Set Configuration
+ */
+static void MGC_HostSetConfiguration(void* pParam)
+{
+    MGC_Controller* pController = (MGC_Controller*)pParam;
+    MGC_Port* pPort = pController->pPort;
+    MGC_EnumerationData* pEnumData = &(pPort->EnumerationData);
+//    MUSB_DeviceRequest* pRequest = (MUSB_DeviceRequest*)pEnumData->aSetupTx;
+    
+    MUSB_DPRINTF("MGC_HostSetConfiguration\r\n");
+
+    MUSB_DPRINTF1("%s: pEnumData->bIndex = 0x%x\r\n", __FUNCTION__, pEnumData->bIndex);
+
+    MUSB_MemCopy(pEnumData->aSetupTx, MGC_aSetConfiguration, sizeof(MGC_aSetConfiguration));
+    pEnumData->aSetupTx[2] = pEnumData->bIndex;
+    pEnumData->Irp.pOutBuffer = pEnumData->aSetupTx;
+    pEnumData->Irp.dwOutLength = sizeof(MGC_aSetConfiguration);
+    pEnumData->bState = (uint8_t)MGC_EnumStateSetConfiguration;
+    MUSB_StartControlTransfer(pPort->pInterfacePort, &(pEnumData->Irp));
+}
+
 #ifdef MUSB_EHSET
 static void MGC_EhsetResume(void *pParam)
 {
-    MGC_Controller *pController = (MGC_Controller *)pParam;
-    MGC_Port *pPort = pController->pPort;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MGC_Controller* pController = (MGC_Controller*)pParam;
+    MGC_Port* pPort = pController->pPort;
 
     pPort->pfSetPortTestMode(pPort, MUSB_HSET_PORT_RESUME);
 }
@@ -323,6 +350,7 @@ static void MGC_EhsetGetDescriptorSetup(void *pParam)
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_DeviceRequest *pRequest = (MUSB_DeviceRequest *)pEnumData->aSetupTx;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_DIAG(2, pPort->pController, "Getting complete device descriptor");
 
     MUSB_MemCopy(pEnumData->aSetupTx, MGC_aGetDeviceDescriptor,
@@ -336,8 +364,9 @@ static void MGC_EhsetGetDescriptorSetup(void *pParam)
 
 static void MGC_EhsetGetDescriptorIn(void *pParam)
 {
-    MGC_Controller *pController = (MGC_Controller *)pParam;
-    MGC_Port *pPort = pController->pPort;
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MGC_Controller* pController = (MGC_Controller*)pParam;
+    MGC_Port* pPort = pController->pPort;
 
     pPort->pfSetPortTestMode(pPort, MUSB_HSET_PORT_SETUP_IN);
 }
@@ -346,7 +375,9 @@ static void MGC_Ehset(MGC_Port *pPort, uint8_t bBusAddress, uint16_t wPid)
 {
     MGC_Controller *pController = pPort->pController;
 
-    switch(wPid)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    switch (wPid)
     {
     case 0x0101:
         /* SE0_NAK */
@@ -412,9 +443,11 @@ static uint16_t MGC_SkipEntry(const uint8_t *pOperand, uint16_t wInputIndex,
 {
     uint16_t wIndex = wInputIndex;
 
-    while(wIndex < wLength)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    while (wIndex < wLength)
     {
-        switch(pOperand[wIndex])
+        switch (pOperand[wIndex])
         {
         case MUSB_TARGET_UNKNOWN:
         case MUSB_TARGET_CONFIG:
@@ -443,6 +476,9 @@ static uint16_t MGC_SkipEntry(const uint8_t *pOperand, uint16_t wInputIndex,
     return wIndex;
 }
 
+/*
+ * Find a driver
+ */
 MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
                                       const MUSB_Device *pDevice,
                                       const MUSB_ConfigurationDescriptor *pConfig,
@@ -458,20 +494,28 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
     uint16_t wLength = pClient->wPeripheralListLength;
     const uint8_t *pOperand = pClient->pPeripheralList;
 
-    MUSB_PRT("[MGC] HostFindDriver\r\n");
-    while(wIndex < wLength)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_HostFindDriver\r\n");
+    MUSB_DPRINTF("%s: pClient->pPeripheralList = 0x%p\r\n", __FUNCTION__, pClient->pPeripheralList);
+    MUSB_DPRINTF("%s: wLength = 0x%x\r\n", __FUNCTION__, wLength);
+    MUSB_DPRINTF("%s: pConfig:", __FUNCTION__);
+    MUSB_DPRINTF("\r\n");
+    while (wIndex < wLength)
     {
-        switch(pOperand[wIndex])
+        MUSB_DPRINTF("pOperand[%d] = 0x%x\r\n", wIndex, pOperand[wIndex]);
+        switch (pOperand[wIndex])
         {
         case MUSB_TARGET_UNKNOWN:
+            MUSB_DPRINTF("%s: MUSB_TARGET_UNKNOWN\r\n", __FUNCTION__);
             wIndex++;
             break;
 
         case MUSB_TARGET_VID:
+            MUSB_DPRINTF("%s: MUSB_TARGET_VID\r\n", __FUNCTION__);
             wData = pOperand[++wIndex];
             wData |= (pOperand[++wIndex] << 8);
             wIndex++;
-            if(wData != MUSB_SWAP16P((uint8_t *) & (pDevice->DeviceDescriptor.idVendor)))
+            if (wData != MUSB_SWAP16P((uint8_t*)&(pDevice->DeviceDescriptor.idVendor)))
             {
                 /* Reset and continue on to next list */
                 bInterface = FALSE;
@@ -481,10 +525,11 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
             break;
 
         case MUSB_TARGET_PID:
+            MUSB_DPRINTF("%s: MUSB_TARGET_PID\r\n", __FUNCTION__);
             wData = pOperand[++wIndex];
             wData |= (pOperand[++wIndex] << 8);
             wIndex++;
-            if(wData != MUSB_SWAP16P((uint8_t *) & (pDevice->DeviceDescriptor.idProduct)))
+            if (wData != MUSB_SWAP16P((uint8_t*)&(pDevice->DeviceDescriptor.idProduct)))
             {
                 /* Reset and continue on to next list */
                 bInterface = FALSE;
@@ -494,10 +539,11 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
             break;
 
         case MUSB_TARGET_DEVICE_BCD:
+            MUSB_DPRINTF("%s: MUSB_TARGET_DEVICE_BCD\r\n", __FUNCTION__);
             wData = pOperand[++wIndex];
             wData |= (pOperand[++wIndex] << 8);
-            wIndex++;
-            if(wData != MUSB_SWAP16P((uint8_t *) & (pDevice->DeviceDescriptor.bcdDevice)))
+            wIndex ++;
+            if (wData != MUSB_SWAP16P((uint8_t*)&(pDevice->DeviceDescriptor.bcdDevice)))
             {
                 /* Reset and continue on to next list */
                 bInterface = FALSE;
@@ -507,10 +553,11 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
             break;
 
         case MUSB_TARGET_CONFIG:
+            MUSB_DPRINTF("%s: MUSB_TARGET_CONFIG\r\n", __FUNCTION__);
             bData = pOperand[++wIndex];
             wIndex++;
             bInterface = FALSE;
-            if(bData < pDevice->DeviceDescriptor.bNumConfigurations)
+            if (bData < pDevice->DeviceDescriptor.bNumConfigurations)
             {
                 pConfig = pDevice->apConfigDescriptors[bData];
                 wConfigLength = MUSB_SWAP16P((uint8_t *) & (pConfig->wTotalLength));
@@ -528,21 +575,29 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
             bData = pOperand[++wIndex];
             wIndex++;
             bInterface = TRUE;
+            MUSB_DPRINTF("%s: MUSB_TARGET_INTERFACE: bData = 0x%x, wIndex = 0x%x, bInterface = 0x%x\r\n",
+                    __FUNCTION__, bData, wIndex, bInterface);
             pInterface = (MUSB_InterfaceDescriptor *)MGC_FindDescriptor(
                              (uint8_t *)pConfig, wConfigLength, MUSB_DT_INTERFACE, bData);
-            if(!pInterface)
+            if (!pInterface)
             {
                 /* Reset and continue on to next list */
                 bInterface = FALSE;
                 wIndex = MGC_SkipEntry(pOperand, wIndex, wLength);
                 wEntryIndex = wIndex;
             }
+            MUSB_DPRINTF("%s: MUSB_TARGET_INTERFACE: wIndex = 0x%x, wEntryIndex = 0x%x\r\n",
+                    __FUNCTION__, wIndex, wEntryIndex);
             break;
 
         case MUSB_TARGET_CLASS:
             bData = pOperand[++wIndex];
             wIndex++;
-            if(bInterface)
+            MUSB_DPRINTF("%s: MUSB_TARGET_CLASS: bData = 0x%x, wIndex = 0x%x, bInterface = 0x%x\r\n",
+                    __FUNCTION__, bData, wIndex, bInterface);
+            MUSB_DPRINTF("%s: MUSB_TARGET_CLASS: pInterface->bInterfaceClass = 0x%x, pDevice->DeviceDescriptor.bDeviceClass = 0x%x\r\n",
+                    __FUNCTION__, pInterface->bInterfaceClass, pDevice->DeviceDescriptor.bDeviceClass);
+            if (bInterface)
             {
                 if (bData != pInterface->bInterfaceClass)
                 {
@@ -562,12 +617,18 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
                     wEntryIndex = wIndex;
                 }
             }
+            MUSB_DPRINTF("%s: MUSB_TARGET_CLASS: wIndex = 0x%x, wEntryIndex = 0x%x\r\n",
+                    __FUNCTION__, wIndex, wEntryIndex);
             break;
 
         case MUSB_TARGET_SUBCLASS:
             bData = pOperand[++wIndex];
             wIndex++;
-            if(bInterface)
+            MUSB_DPRINTF("%s: MUSB_TARGET_SUBCLASS: bData = 0x%x, wIndex = 0x%x, bInterface = 0x%x\r\n",
+                    __FUNCTION__, bData, wIndex, bInterface);
+            MUSB_DPRINTF("%s: MUSB_TARGET_SUBCLASS: pInterface->bInterfaceSubClass = 0x%x, pDevice->DeviceDescriptor.bDeviceSubClass = 0x%x\r\n",
+                    __FUNCTION__, pInterface->bInterfaceSubClass, pDevice->DeviceDescriptor.bDeviceSubClass);
+            if (bInterface)
             {
                 if (bData != pInterface->bInterfaceSubClass)
                 {
@@ -587,12 +648,18 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
                     wEntryIndex = wIndex;
                 }
             }
+            MUSB_DPRINTF("%s: MUSB_TARGET_SUBCLASS: wIndex = 0x%x, wEntryIndex = 0x%x\r\n",
+                    __FUNCTION__, wIndex, wEntryIndex);
             break;
 
         case MUSB_TARGET_PROTOCOL:
             bData = pOperand[++wIndex];
             wIndex++;
-            if(bInterface)
+            MUSB_DPRINTF("%s: MUSB_TARGET_PROTOCOL: bData = 0x%x, wIndex = 0x%x, bInterface = 0x%x\r\n",
+                    __FUNCTION__, bData, wIndex, bInterface);
+            MUSB_DPRINTF("%s: MUSB_TARGET_PROTOCOL: pInterface->bInterfaceProtocol = 0x%x, pDevice->DeviceDescriptor.bDeviceProtocol = 0x%x\r\n",
+                    __FUNCTION__, pInterface->bInterfaceProtocol, pDevice->DeviceDescriptor.bDeviceProtocol);
+            if (bInterface)
             {
                 if (bData != pInterface->bInterfaceProtocol)
                 {
@@ -612,13 +679,17 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
                     wEntryIndex = wIndex;
                 }
             }
+            MUSB_DPRINTF("%s: MUSB_TARGET_PROTOCOL: wIndex = 0x%x, wEntryIndex = 0x%x\r\n",
+                    __FUNCTION__, wIndex, wEntryIndex);
             break;
 
         case MUSB_TARGET_ACCEPT:
             /* At this point, all the criteria have been met with success and so
                this list is a match. */
             bData = pOperand[++wIndex];
-            if(bData < pClient->bDeviceDriverListLength)
+            MUSB_DPRINTF("%s: MUSB_TARGET_ACCEPT: bData = 0x%x, wIndex = 0x%x, wEntryIndex = 0x%x, pClient->bDeviceDriverListLength = 0x%x\r\n",
+                    __FUNCTION__, bData, wIndex, wEntryIndex, pClient->bDeviceDriverListLength);
+            if (bData < pClient->bDeviceDriverListLength)
             {
                 *ppEntry = &(pOperand[wEntryIndex]);
                 return &(pClient->aDeviceDriverList[bData]);
@@ -626,8 +697,10 @@ MUSB_DeviceDriver *MGC_HostFindDriver(MUSB_HostClient *pClient,
             return NULL;
 
         case MUSB_TARGET_REJECT:
+            MUSB_DPRINTF("%s: MUSB_TARGET_REJECT\r\n", __FUNCTION__);
             return NULL;
         }
+        MUSB_DPRINTF("wIndex = 0x%x, wLength = 0x%x\r\n", wIndex, wLength);
     }
 
     return NULL;
@@ -654,41 +727,45 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
     MUSB_SystemServices *pServices = pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_HostEnumerator start\r\n");
     /* NOTE: assumes EP0 is first */
     pEnd = MUSB_ArrayFetch(&(pPort->LocalEnds), 0);
 
-    if(!pEnd)
+    if (!pEnd)
     {
         MGC_DIAG(1, pController, "Internal error during enumeration");
         return Ret;
     }
 
-    if(pEnumData->Irp.dwStatus)
+    if (pEnumData->Irp.dwStatus)
     {
-        MUSB_PRT("error :irp.dwstatus=%x\r\n", pEnumData->Irp.dwStatus);
+        MUSB_DPRINTF("MGC_HostEnumerator: error:irp.dwstatus = 0x%x\r\n",pEnumData->Irp.dwStatus);
 
         wValue = pEnumData->Irp.pOutBuffer[2] | (pEnumData->Irp.pOutBuffer[3] << 8);
         wIndex = pEnumData->Irp.pOutBuffer[4] | (pEnumData->Irp.pOutBuffer[5] << 8);
         wLength = pEnumData->Irp.pOutBuffer[6] | (pEnumData->Irp.pOutBuffer[7] << 8);
 
-        if(++pEnumData->bRetries > MGC_MAX_ENUM_RETRIES)
+        if (++pEnumData->bRetries > MGC_MAX_ENUM_RETRIES)
         {
-            MUSB_PRT("error retry\r\n");
+            MUSB_DPRINTF("error retry\r\n");
             pEnumData->bState = MGC_EnumStateIdle;
             MGC_ReleaseAddress(pEnumData, pEnumData->pDevice->bBusAddress);
-            if(pEnumData->pDevice->apConfigDescriptors)
+            if (pEnumData->pDevice->apConfigDescriptors)
             {
                 MUSB_MemFree(pEnumData->pDevice->apConfigDescriptors);
                 pEnumData->pDevice->apConfigDescriptors = NULL;
             }
-            if(pEnumData->pDevice->pDescriptorBuffer)
+            if (pEnumData->pDevice->pDescriptorBuffer)
             {
                 MUSB_MemFree(pEnumData->pDevice->pDescriptorBuffer);
                 pEnumData->pDevice->pDescriptorBuffer = NULL;
             }
-            MUSB_MemFree(pEnumData->pDevice->pPrivateData);
-            pEnumData->pDevice->pPrivateData = NULL;
-
+            if(pEnumData->pDevice->pPrivateData)
+            {
+                MUSB_MemFree(pEnumData->pDevice->pPrivateData);
+                pEnumData->pDevice->pPrivateData = NULL;
+            }
             return Ret;
         }
         else
@@ -702,8 +779,9 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
     pEnumData->bRetries = 0;
     pEnumData->bFatalRetries = 0;
 
+    MUSB_DPRINTF("%s: pEnumData->bState = 0x%x\r\n", __FUNCTION__, pEnumData->bState);
     /* Decide what to do next based on what we just did */
-    switch(pEnumData->bState)
+    switch (pEnumData->bState)
     {
     case MGC_EnumStateGetDeviceZeroAddress:
         pServices->pfArmTimer(pServices->pPrivateData, 0, 2, FALSE,
@@ -712,7 +790,7 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
 
     case MGC_EnumStateSetAddress:
         pEnumData->pDevice->bBusAddress = pEnumData->bAddress;
-        if(!pPort->bIsMultipoint)
+        if (!pPort->bIsMultipoint)
         {
             /* program the address (some DRCs need it even in host mode) */
             pPort->bFuncAddr = pEnumData->bAddress;
@@ -737,7 +815,7 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
 #ifdef MUSB_EHSET
         wIndex = MUSB_SWAP16P(&(pDeviceDesc->idVendor));
         wValue = MUSB_SWAP16P(&(pDeviceDesc->idProduct));
-        if((6666 == wIndex) && ((wValue >= 0x0101) && (wValue <= 0x0108)))
+        if ((6666 == wIndex) && ((wValue >= 0x0101) && (wValue <= 0x0108)))
         {
             MGC_Ehset(pPort, pEnumData->pDevice->bBusAddress, wValue);
             return 0;//???????
@@ -762,18 +840,31 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
                      (void *)pDeviceDesc, sizeof(MUSB_DeviceDescriptor));
 
         /* allocate convenience pointers (we temporarily use them to remember sizes) */
-        pEnumData->pDevice->apConfigDescriptors = (MUSB_ConfigurationDescriptor **)MUSB_MemAlloc(
-                    pDeviceDesc->bNumConfigurations * sizeof(uint8_t *));
-
-        if(pEnumData->pDevice->apConfigDescriptors)
+        MUSB_DPRINTF("MGC_HostEnumerator: pDeviceDesc->bNumConfigurations = %d, sizeof(uint8_t*) = %d\r\n",
+                pDeviceDesc->bNumConfigurations,
+                sizeof(uint8_t*));
+        if (pEnumData->pDevice->apConfigDescriptors)
         {
+            MUSB_MemFree(pEnumData->pDevice->apConfigDescriptors);
+        }
+        pEnumData->pDevice->apConfigDescriptors = (MUSB_ConfigurationDescriptor **)MUSB_MemAlloc(
+                    pDeviceDesc->bNumConfigurations * sizeof(MUSB_ConfigurationDescriptor *));
+
+        if (pEnumData->pDevice->apConfigDescriptors)
+        {
+            MUSB_MemSet(pEnumData->pDevice->apConfigDescriptors, 0, 
+                        pDeviceDesc->bNumConfigurations * sizeof(MUSB_ConfigurationDescriptor*));
             /* get min config descriptors to gather full sizes */
-            pEnumData->bState = MGC_EnumStateSizeConfigs;
+            pEnumData->bState = MGC_EnumStateMinConfigs;
             pEnumData->Irp.pInBuffer = pEnumData->aSetupRx;
             pEnumData->Irp.dwInLength = sizeof(MUSB_ConfigurationDescriptor);
             pServices->pfArmTimer(pServices->pPrivateData, 0, 2, FALSE,
                                   MGC_HostGetConfig);
             break;
+        }
+        else
+        {
+            MUSB_ERR_PRINTF("MGC_HostEnumerator: MUSB_MemAlloc 1 failed\r\n");
         }
         MUSB_MemFree(pEnumData->pDevice->pPrivateData);
         pEnumData->pDevice = NULL;
@@ -781,7 +872,7 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
         MGC_DIAG(1, pController, "Insufficient memory for new device");
         break;
 
-    case MGC_EnumStateSizeConfigs:
+    case MGC_EnumStateMinConfigs:
         /* collect size */
         pConfigDesc = (MUSB_ConfigurationDescriptor *)pEnumData->Irp.pInBuffer;
         wLength = MUSB_SWAP16P((uint8_t *) & (pConfigDesc->wTotalLength));
@@ -793,17 +884,19 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
         MGC_DIAG1(2, pController, "Total config length=",
                   pEnumData->dwData, 16, 0);
 
-        pEnumData->bIndex = 0;
-        pEnumData->bState = MGC_EnumStateGetConfigs;
+//        pEnumData->bIndex = 0;
+        pEnumData->bState = MGC_EnumStateGetFullConfigs;
 
         pDescriptorBuffer = (uint8_t *)MUSB_MemAlloc(pEnumData->dwData);
-        if(!pDescriptorBuffer)
+        if (!pDescriptorBuffer)
         {
+            MUSB_ERR_PRINTF("MGC_HostEnumerator: MUSB_MemAlloc 2 failed\r\n");
             MGC_DIAG(1, pController, "Insufficient memory for new device");
             MUSB_MemFree(pEnumData->pDevice->pPrivateData);
             pEnumData->pDevice->pPrivateData = NULL;
             break;
         }
+        MUSB_MemSet(pDescriptorBuffer, 0, pEnumData->dwData);
         //获得完整的configuration descriptor
         /* start gathering full config info */
         pEnumData->pDevice->pDescriptorBuffer = pDescriptorBuffer;
@@ -816,9 +909,12 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
                               MGC_HostGetConfig);
         break;
 
-    case MGC_EnumStateGetConfigs:
+    case MGC_EnumStateGetFullConfigs:
+        MUSB_DPRINTF("%s: MGC_EnumStateGetFullConfigs\r\n", __FUNCTION__);
         /* replace saved lengths with actual pointers as we go */
-        if(pEnumData->bIndex)
+        MUSB_DPRINTF("MGC_HostEnumerator: pEnumData->bIndex = 0x%x, pEnumData->bCount = 0x%x\r\n",
+                     pEnumData->bIndex, pEnumData->bCount);
+        if (pEnumData->bIndex)
         {
             pConfigDesc = pEnumData->pDevice->apConfigDescriptors[pEnumData->bIndex - 1];
             wLength = MUSB_SWAP16P((uint8_t *) & (pConfigDesc->wTotalLength));
@@ -827,21 +923,23 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
                 ((uint8_t *)pEnumData->pDevice->apConfigDescriptors[pEnumData->bIndex - 1] + wLength);
         }
 
-        if(++pEnumData->bIndex >= pEnumData->bCount)
+        if (++pEnumData->bIndex >= pEnumData->bCount)
         {
+			MUSB_DPRINTF("MGC_HostEnumerator: finished gathering configs\r\n");
+
             bMaxPower = 0;
             bCount = pEnumData->pDevice->DeviceDescriptor.bNumConfigurations;
-            for(bIndex = 0; bIndex < bCount; bIndex++)
+            for (bIndex = 0; bIndex < bCount; bIndex++)
             {
                 bPower = pEnumData->pDevice->apConfigDescriptors[bIndex]->bMaxPower;
-                if(bPower > bMaxPower)
+                if (bPower > bMaxPower)
                 {
                     bMaxPower = bPower;
                 }
             }
 
             /* device is ready for a driver */
-            for(bConfig = 0;
+            for (bConfig = 0;
                     bConfig < pEnumData->pDevice->DeviceDescriptor.bNumConfigurations;
                     bConfig++)
             {
@@ -850,14 +948,16 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
                                              pEnumData->pDevice,
                                              pConfig,
                                              (const uint8_t **) &pEntry);
-                if(pDriver)
+                if (pDriver)
                 {
+	                MUSB_DPRINTF("find driver\r\n");
                     pEnumData->pDevice->pCurrentConfiguration = pConfig;
                     break;
                 }
             }
+			MUSB_DPRINTF("MGC_HostEnumerator: pDriver = 0x%p\r\n", pDriver);
             /* dump basic device info */
-            if(pDriver)
+            if (pDriver)
             {
                 MUSB_PRT("Found driver for device revision = %x\r\n", pEnumData->pDevice->DeviceDescriptor.bcdDevice);
             }
@@ -867,91 +967,126 @@ static uint32_t MGC_HostEnumerator(void *pParam, MUSB_ControlIrp *pIrp)
             }
 
             /* perform controller-specific device acceptance */
+		    //MGC_DrcAcceptDevice()
+			pEnumData->bState = MGC_EnumStateIdle;
+			MUSB_DPRINTF("MGC_HostEnumerator: pPort->pfAcceptDevice = 0x%p\r\n", pPort->pfAcceptDevice);
             if (pPort->pfAcceptDevice)
             {
-                if(pPort->pfAcceptDevice(pPort, pEnumData->pDevice, pDriver))
+                if (pPort->pfAcceptDevice(pPort, pEnumData->pDevice, pDriver))
                 {
                     MGC_BsrItem qItem;
 
+		            MUSB_DPRINTF("MGC_HostEnumerator: accept device\r\n");
+			        /* device accepted; add to list */
                     pDevice = (MGC_Device *)pEnumData->pDevice->pPrivateData;
                     pDevice->pDriver = pDriver;
                     MUSB_ListAppendItem(&(pPort->ConnectedDeviceList),
                                         pEnumData->pDevice, 0);
-                    if(!pPort->pRootDevice)
+                    if (!pPort->pRootDevice)
                     {
                         pPort->pRootDevice = pEnumData->pDevice;
                     }
-                    if(pEnumData->pfEnumerationComplete)
+                    if (pEnumData->pfEnumerationComplete)
                     {
                         pEnumData->pfEnumerationComplete(pEnumData->pDevice->pParentUsbDevice,
                                                          pEnumData->pDevice);
                         pEnumData->pfEnumerationComplete = NULL;
                     }
 
-                    /*MUSB_MsdConnect()*/
-                    MUSB_PRT("[MUSB] usb_pfDeviceConnected\r\n");
-                    pDriver->pfDeviceConnected(pDriver->pPrivateData, pPort,
-                                               pEnumData->pDevice, pEntry);
+			        /* inform driver */
+					/*运行到此处时，刚完成get configuration(full)整个过程,接下来是set configuration()*/	
 
+			        // 就是函数 MUSB_MsdConnect()
+                    MUSB_PRT("[MUSB] usb_pfDeviceConnected\r\n");
+			        if (pDriver->pfDeviceConnected(pDriver->pPrivateData, pPort, 
+		        	    pEnumData->pDevice, pEntry) == TRUE)
+                    {
                     qItem.bCause = MGC_BSR_CAUSE_ENUMERATION_OK;
-                    pServices->pfQueueBackgroundItem(pServices->pPrivateData, &qItem);
+//                        msg_put(MSG_USB_HOST_ATTACH_UDISK_OK);
+                    }
+                    else
+                    {
+//                        msg_put(MSG_USB_HOST_ATTACH_UDISK_ERROR);
+                    }
                 }
                 else
                 {
-                    MGC_ReleaseAddress(pEnumData, pEnumData->pDevice->bBusAddress);
-                    if(pEnumData->pDevice->apConfigDescriptors)
+				    MUSB_ERR_PRINTF("not Udisk!\r\n");
+					pServices->pfArmTimer(pServices->pPrivateData, 0, 2, FALSE, MGC_HostSetConfiguration);
+/*					MGC_ReleaseAddress(pEnumData, pEnumData->pDevice->bBusAddress);
+					if (pEnumData->pDevice->apConfigDescriptors)
+					{
+						MUSB_MemFree(pEnumData->pDevice->apConfigDescriptors);
+						pEnumData->pDevice->apConfigDescriptors = NULL;
+					}
+					if (pEnumData->pDevice->pDescriptorBuffer)
+					{
+						MUSB_MemFree(pEnumData->pDevice->pDescriptorBuffer);
+						pEnumData->pDevice->pDescriptorBuffer = NULL;
+					}
+                    if (pEnumData->pDevice->pPrivateData)
                     {
-                        MUSB_MemFree(pEnumData->pDevice->apConfigDescriptors);
-                    }
-
-                    if(pEnumData->pDevice->pDescriptorBuffer)
-                    {
-                        MUSB_MemFree(pEnumData->pDevice->pDescriptorBuffer);
-                    }
-
-                    MUSB_MemFree(pEnumData->pDevice->pPrivateData);
+					    MUSB_MemFree(pEnumData->pDevice->pPrivateData);
+					    pEnumData->pDevice->pPrivateData = NULL;
+                    }*/
                 }
             }
 
-            pEnumData->bState = MGC_EnumStateIdle;
+//            pEnumData->bState = MGC_EnumStateIdle;
             break;
         }
 
         /* continue gathering */
-        wLength = *((uint16_t *) & (pEnumData->pDevice->apConfigDescriptors[pEnumData->bIndex]));
+//        wLength = *((uint16_t *) &(pEnumData->pDevice->apConfigDescriptors[pEnumData->bIndex]));
         pEnumData->Irp.pInBuffer += pEnumData->Irp.dwInLength;
-        pEnumData->Irp.dwInLength = wLength;
+        pEnumData->Irp.dwInLength = sizeof(MUSB_ConfigurationDescriptor);
+		pEnumData->bState = MGC_EnumStateMinConfigs;
         pServices->pfArmTimer(pServices->pPrivateData, 0, 2, FALSE,
                               MGC_HostGetConfig);
         break;
 
     case MGC_EnumStateGetDeviceStatus:
+		break;
+
+	case MGC_EnumStateSetConfiguration:
+        MUSB_DPRINTF("MGC_EnumStateSetConfiguration\r\n");
+//        USBHostEnumerateDeviceState = 4;
+//        msg_put(MSG_USB_HOST_ATTACH_OTHER_DEVICE_OK);
+	    pEnumData->bState = MGC_EnumStateIdle;
+        Ret = 1;
+        return Ret;
+
     default:
         break;
     }
+    MUSB_DPRINTF("MGC_HostEnumerator end\r\n");
     return 0;//Ret;
 }
 
+/*
+ * Try to assign address
+ */
 uint8_t MGC_AllocateAddress(MGC_EnumerationData *pEnumData)
 {
     uint8_t bIndex, bBit;
     uint8_t bmAddress;
     uint8_t bAddress = 0;
 
-    for(bIndex = 0; bIndex < 16; bIndex++)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    for (bIndex = 0; bIndex < 16; bIndex++)
     {
         bmAddress = pEnumData->abmAddress[bIndex];
-        if(bmAddress < 0xff)
+        if (bmAddress < 0xff)
         {
             break;
         }
     }
-    if(bmAddress < 0xff)
+    if (bmAddress < 0xff)
     {
         bmAddress = ~bmAddress;
-        for(bBit = 0; bBit < 8; bBit++)
+        for (bBit = 0; bBit < 8; bBit++)
         {
-            if(bmAddress & 1)
+            if (bmAddress & 1)
             {
                 break;
             }
@@ -960,11 +1095,11 @@ uint8_t MGC_AllocateAddress(MGC_EnumerationData *pEnumData)
         bAddress = (bIndex << 3) | bBit;
         pEnumData->abmAddress[bIndex] |= (1 << bBit);
     }
-    if(++bAddress > 127)
+    if (++bAddress > 127)
     {
         bAddress = 0;
     }
-    if((1 == bAddress) && bIndex)
+    if ((1 == bAddress) && bIndex)
     {
         bAddress = 0;
     }
@@ -972,12 +1107,17 @@ uint8_t MGC_AllocateAddress(MGC_EnumerationData *pEnumData)
     return bAddress;
 }
 
+/*
+ * Release an address
+ */
 void MGC_ReleaseAddress(MGC_EnumerationData *pEnumData, uint8_t bAddress)
 {
     uint8_t bIndex = (bAddress - 1) >> 3;
     uint8_t bBit = (bAddress - 1) & 0x7;
 
-    if(bIndex < 16)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("%s: bAddress = %d\r\n", __FUNCTION__, bAddress);
+    if (bIndex < 16)
     {
         pEnumData->abmAddress[bIndex] &= ~(1 << bBit);
     }
@@ -994,9 +1134,12 @@ uint8_t MGC_EnumerateDevice(MGC_Port *pPort, MUSB_Device *pHubDevice,
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
     MGC_EnumerationData *pEnumData = &(pPort->EnumerationData);
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* allocate new device struct */
     pDevice = (MGC_Device *)MUSB_MemAlloc(sizeof(MGC_Device));
-    if(pDevice)
+    memory_usage_show();
+    if (pDevice)
     {
         MUSB_MemSet(pDevice, 0, sizeof(MGC_Device));
         MUSB_ListInit(&(pDevice->PipeList));
@@ -1010,7 +1153,7 @@ uint8_t MGC_EnumerateDevice(MGC_Port *pPort, MUSB_Device *pHubDevice,
         pEnumData->pDevice->pParentUsbDevice = pHubDevice;
 
 #ifdef MUSB_HUB
-        if(pHubDevice)
+        if (pHubDevice)
         {
             pDevice->bIsMultiTt = (2 == pEnumData->pDevice->pParentUsbDevice->DeviceDescriptor.bDeviceProtocol);
         }
@@ -1029,6 +1172,10 @@ uint8_t MGC_EnumerateDevice(MGC_Port *pPort, MUSB_Device *pHubDevice,
                               0, 40, FALSE, MGC_HostGetShortDescriptorZeroAddress);
         return TRUE;
     }
+    else
+    {
+        MUSB_ERR_PRINTF("MGC_EnumerateDevice: MUSB_MemAlloc failed\r\n");
+    }
     return FALSE;
 }
 
@@ -1038,29 +1185,31 @@ uint8_t MGC_HostDestroy(MGC_Port *pPort)
     uint16_t wIndex, wCount;
     MGC_EnumerationData *pEnumData;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     wCount = MUSB_ListLength(&(pPort->ConnectedDeviceList));
-    MUSB_PRT("wcount = %x \r\n", wCount);
+	MUSB_DPRINTF("wcount = %x \r\n",wCount);
     pEnumData = &(pPort->EnumerationData);
 
-    if(wCount == 0)
+    if (wCount == 0)
     {
-        if(pEnumData != NULL)
+        if (pEnumData != NULL)
         {
             pEnumData->bState = MGC_EnumStateIdle;
-            if(NULL == pEnumData->pDevice)
+            if (NULL == pEnumData->pDevice)
                 return TRUE;
             MGC_ReleaseAddress(pEnumData, pEnumData->pDevice->bBusAddress);
-            if(pEnumData->pDevice->apConfigDescriptors)
+            if (pEnumData->pDevice->apConfigDescriptors)
             {
                 MUSB_MemFree(pEnumData->pDevice->apConfigDescriptors);
                 pEnumData->pDevice->apConfigDescriptors = NULL;
             }
-            if(pEnumData->pDevice->pDescriptorBuffer)
+            if (pEnumData->pDevice->pDescriptorBuffer)
             {
                 MUSB_MemFree(pEnumData->pDevice->pDescriptorBuffer);
                 pEnumData->pDevice->pDescriptorBuffer = NULL;
             }
-            if(pEnumData->pDevice->pPrivateData)
+            if (pEnumData->pDevice->pPrivateData)
             {
                 MUSB_MemFree(pEnumData->pDevice->pPrivateData);
                 pEnumData->pDevice->pPrivateData = NULL;
@@ -1069,18 +1218,25 @@ uint8_t MGC_HostDestroy(MGC_Port *pPort)
     }
     else
     {
-        for(wIndex = 0; wIndex < wCount; wIndex++)
+        for (wIndex = 0; wIndex < wCount; wIndex++)
         {
             pDevice = (MUSB_Device *)MUSB_ListFindItem(&(pPort->ConnectedDeviceList), 0);
-            MUSB_DeviceDisconnected(pDevice);
+			if (pDevice)
+			{
+                MUSB_DeviceDisconnected(pDevice);
+			}
             MUSB_ListRemoveItem(&(pPort->ConnectedDeviceList), pDevice);
         }
         pEnumData->pDevice = NULL;
     }
+
     return TRUE;
 }
 
 #ifdef MUSB_HUB
+/*
+ * Enumerate a device
+ */
 uint32_t MUSB_EnumerateDevice(MUSB_Device *pHubDevice, uint8_t bHubPort,
                               uint8_t bSpeed, MUSB_pfHubEnumerationComplete pfHubEnumerationComplete)
 {
@@ -1095,9 +1251,9 @@ uint32_t MUSB_EnumerateDevice(MUSB_Device *pHubDevice, uint8_t bHubPort,
 
     bAddress = MGC_AllocateAddress(pEnumData);
 
-    if(bAddress)
+    if (bAddress)
     {
-        if(MGC_EnumStateIdle != pEnumData->bState)
+        if (MGC_EnumStateIdle != pEnumData->bState)
         {
             dwStatus = MUSB_STATUS_ENDPOINT_BUSY;
             MGC_ReleaseAddress(pEnumData, bAddress);
@@ -1128,8 +1284,9 @@ void MUSB_RejectDevice(MUSB_BusHandle hBus, MUSB_Device *pDevice)
     MGC_Device *pImplDevice = (MGC_Device *)pDevice->pPrivateData;
     MUSB_SystemServices *pServices = pImplPort->pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_HUB
-    if(pImplDevice && pImplDevice->pSchedule)
+    if (pImplDevice && pImplDevice->pSchedule)
     {
         /* free all schedule slots */
         MGC_FreeScheduleContents(pImplDevice->pSchedule);
@@ -1137,7 +1294,7 @@ void MUSB_RejectDevice(MUSB_BusHandle hBus, MUSB_Device *pDevice)
         pImplDevice->pSchedule = NULL;
     }
 #endif
-    if(pDevice == pImplPort->pRootDevice)
+    if (pDevice == pImplPort->pRootDevice)
     {
         MGC_FreeScheduleContents(&(pImplPort->Schedule));
     }
@@ -1147,14 +1304,14 @@ void MUSB_RejectDevice(MUSB_BusHandle hBus, MUSB_Device *pDevice)
     /* lock */
     pServices->pfLock(pServices->pPrivateData, 0);
 
-    if(pImplDevice)
+    if (pImplDevice)
     {
         /* release bandwidth for current config by walking PipeList */
         wCount = MUSB_ListLength(&(pImplDevice->PipeList));
-        for(wIndex = 0; wIndex < wCount; wIndex++)
+        for (wIndex = 0; wIndex < wCount; wIndex++)
         {
             pPipe = (MGC_Pipe *)MUSB_ListFindItem(&(pImplDevice->PipeList), 0);
-            if(pPipe->pSlot)
+            if (pPipe->pSlot)
             {
                 MUSB_ListRemoveItem(&(pPipe->pSlot->PipeList), pPipe);
             }
@@ -1165,25 +1322,25 @@ void MUSB_RejectDevice(MUSB_BusHandle hBus, MUSB_Device *pDevice)
     MUSB_ListRemoveItem(&(pImplPort->ConnectedDeviceList), pDevice);
 
     /* release memory */
-    if(pDevice->apConfigDescriptors)
+    if (pDevice->apConfigDescriptors)
     {
         MUSB_MemFree((void *)pDevice->apConfigDescriptors);
         pDevice->apConfigDescriptors = NULL;
     }
-    if(pDevice->pDescriptorBuffer)
+    if (pDevice->pDescriptorBuffer)
     {
         MUSB_MemFree((void *)pDevice->pDescriptorBuffer);
         pDevice->pDescriptorBuffer = NULL;
     }
+
     pDevice->pPrivateData = NULL;
-    if(pImplDevice)
+    if (pImplDevice)
     {
         MUSB_MemFree(pImplDevice);
     }
 
     /* unlock */
     pServices->pfUnlock(pServices->pPrivateData, 0);
-
 }
 
 void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
@@ -1202,10 +1359,13 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
         pDevice->pCurrentConfiguration ? pDevice->pCurrentConfiguration : pDevice->apConfigDescriptors[0];
     uint16_t wTotalLength = MUSB_SWAP16(pConfigDesc->wTotalLength);
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* create clone */
     pVirtualDevice = (MGC_Device *)MUSB_MemAlloc(sizeof(MGC_Device));
-    if(!pVirtualDevice)
+    if (!pVirtualDevice)
     {
+        MUSB_ERR_PRINTF("MUSB_RejectInterfaces: MUSB_MemAlloc 1 failed\r\n");
         MUSB_DIAG_STRING(1, "Memory allocation error for virtual device");
         return;
     }
@@ -1217,22 +1377,26 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
     /* but make private copy of descriptors (first config only for now) */
     pVirtualDevice->Device.apConfigDescriptors = (MUSB_ConfigurationDescriptor **)MUSB_MemAlloc(
                 sizeof(MUSB_ConfigurationDescriptor *));
-    if(!pVirtualDevice->Device.apConfigDescriptors)
+    if (!pVirtualDevice->Device.apConfigDescriptors)
     {
+        MUSB_ERR_PRINTF("MUSB_RejectInterfaces: MUSB_MemAlloc 2 failed\r\n");
         MUSB_MemFree(pVirtualDevice);
         MUSB_DIAG_STRING(1, "Memory allocation error for virtual device");
         return;
     }
+    MUSB_MemSet(pVirtualDevice->Device.apConfigDescriptors, 0, sizeof(MUSB_ConfigurationDescriptor*));
 
     /* to avoid an extra loop to accumulate required size, just make it the total size */
     pVirtualDevice->Device.pDescriptorBuffer = (uint8_t *)MUSB_MemAlloc(wTotalLength);
-    if(!pVirtualDevice->Device.pDescriptorBuffer)
+    if (!pVirtualDevice->Device.pDescriptorBuffer)
     {
+        MUSB_ERR_PRINTF("MUSB_RejectInterfaces: MUSB_MemAlloc 3 failed\r\n");
         MUSB_MemFree(pVirtualDevice->Device.apConfigDescriptors);
         MUSB_MemFree(pVirtualDevice);
         MUSB_DIAG_STRING(1, "Memory allocation error for virtual device");
         return;
     }
+    MUSB_MemSet(pVirtualDevice->Device.pDescriptorBuffer, 0, wTotalLength);
     pVirtualDevice->Device.apConfigDescriptors[0] =
         (MUSB_ConfigurationDescriptor *)pVirtualDevice->Device.pDescriptorBuffer;
     pVirtualDevice->Device.pCurrentConfiguration = pVirtualDevice->Device.apConfigDescriptors[0];
@@ -1244,18 +1408,18 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
     /* do the job */
     wNewTotalLength = MUSB_DT_CONFIG_SIZE;
     /* to avoid depending on descriptor analysis library, use the primitive finder */
-    for(bIndex = bSearchIndex = 0; bIndex < bInterfaceCount; )
+    for (bIndex = bSearchIndex = 0; bIndex < bInterfaceCount; )
     {
         bNumber = abInterfaceNumber[bIndex];
         pInterface = (MUSB_InterfaceDescriptor *)MGC_FindDescriptor(
                          (const uint8_t *)pConfigDesc, wTotalLength, MUSB_DT_INTERFACE, bSearchIndex);
         /* continue until desired interface is found */
-        if(!pInterface)
+        if (!pInterface)
         {
             /* no such interface; give up */
             break;
         }
-        if(pInterface->bInterfaceNumber != bNumber)
+        if (pInterface->bInterfaceNumber != bNumber)
         {
             bSearchIndex++;
             continue;
@@ -1263,13 +1427,13 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
 
         /* find subsequent non-matching interface */
         pPrevInterface = pInterface;
-        while(pInterface && (pInterface->bInterfaceNumber == bNumber))
+        while (pInterface && (pInterface->bInterfaceNumber == bNumber))
         {
             bSearchIndex++;
             pInterface = (MUSB_InterfaceDescriptor *)MGC_FindDescriptor(
                              (const uint8_t *)pConfigDesc, wTotalLength, MUSB_DT_INTERFACE, bSearchIndex);
         }
-        if(!pInterface)
+        if (!pInterface)
         {
             /* must be tail case */
             break;
@@ -1287,7 +1451,7 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
     }
 
     /* handle tail case */
-    if(pPrevInterface)
+    if (pPrevInterface)
     {
         /* copy all descriptors possibly associated with the interface */
         wLength = wTotalLength - (uint16_t)((intptr_t)pPrevInterface - (intptr_t)pConfigDesc);
@@ -1300,7 +1464,7 @@ void MUSB_RejectInterfaces(MUSB_BusHandle hBus, MUSB_Device *pDevice,
 
     pDriver = MGC_HostFindDriver(pPort->pHostClient,
                                  &(pVirtualDevice->Device), pConfigDesc, (const uint8_t **) &pEntry);
-    if(pDriver)
+    if (pDriver)
     {
         /* device accepted; add to list */
         pVirtualDevice->pDriver = pDriver;
@@ -1328,29 +1492,42 @@ void MUSB_DeviceDisconnected(MUSB_Device *pDevice)
     MGC_Device *pImplDevice;
     MUSB_DeviceDriver *pDriver = NULL;
 
-    if(pDevice)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("++++++musb_deviceDisconnected++++++\r\n");
+    if (pDevice)
     {
+        MUSB_DPRINTF("+++++++0000++++\r\n");
         pPort = pDevice->pPort;
 
         pImplPort = (MGC_Port *)pPort->pPrivateData;
         pImplDevice = (MGC_Device *)pDevice->pPrivateData;
-        if(pImplDevice)
+        if (pImplDevice)
         {
             pDriver = pImplDevice->pDriver;
         }
 
         /* callback */
-        if(pDriver && pDriver->pfDeviceDisconnected)
+        MUSB_DPRINTF("%s: pDriver = 0x%p\r\n", __FUNCTION__, pDriver);
+        if (pDriver)
         {
-            pDriver->pfDeviceDisconnected(pDriver->pPrivateData,
-                                          (MUSB_BusHandle)pImplPort, pDevice);
+        	if (pDriver->pfDeviceDisconnected)
+        	{
+		    	pDriver->pfDeviceDisconnected(pDriver->pPrivateData,
+						(MUSB_BusHandle)pImplPort, pDevice);
+//                msg_put(MSG_USB_HOST_DETACH_UDISK);
+        	}
         }
 
-        MUSB_RejectDevice(pImplPort, pDevice);
+        MUSB_DPRINTF("%s: pImplPort = 0x%p, pDevice = 0x%p\r\n", __FUNCTION__, pImplPort, pDevice);
+		if (pImplPort && pDevice)
+		{
+        	MUSB_RejectDevice(pImplPort, pDevice);
+		}
     }
+    MUSB_DPRINTF("MUSB_DeviceDisconnected out\r\n");
 }
 
-#endif	/* MUSB_ENUMERATOR */
+#endif    /* MUSB_ENUMERATOR */
 
 /*
  * Selective suspend
@@ -1358,6 +1535,7 @@ void MUSB_DeviceDisconnected(MUSB_Device *pDevice)
 uint32_t MUSB_SetTreeSuspend(MUSB_Device *pHubDevice, uint8_t bHubPort,
                              uint8_t bSuspend)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* TODO: figure out which driver is the hub driver and call it */
     return MUSB_STATUS_UNSUPPORTED;
 }
@@ -1371,23 +1549,32 @@ uint8_t MGC_StartNextControlTransfer(MGC_Port *pPort)
     MUSB_ControlIrp *pIrp = NULL;
     MGC_EndpointResource *pEnd = NULL;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_StartNextControlTransfer\r\n");
     /* NOTE: assumes EP0 is first */
     pEnd = MUSB_ArrayFetch(&(pPort->LocalEnds), 0);
-    if(pEnd)
+    MUSB_DPRINTF("%s: pEnd = 0x%p\r\n", __FUNCTION__, pEnd);
+    if (pEnd)
     {
         pIrp = (MUSB_ControlIrp *)MUSB_ListFindItem(&(pEnd->TxIrpList), 0);
-        if(pIrp)
+        MUSB_DPRINTF("%s: pIrp = 0x%p\r\n", __FUNCTION__, pIrp);
+        if (pIrp)
         {
             bOk = TRUE;
             MUSB_ListRemoveItem(&(pEnd->TxIrpList), pIrp);
             pIrp->dwActualInLength = pIrp->dwActualOutLength = 0;
             pIrp->dwStatus = MUSB_STATUS_OK;
             pEnd->bIsTx = TRUE;
-            pPort->pfProgramStartTransmit(pPort, pEnd, pIrp->pOutBuffer, 8, pIrp);
+            MUSB_DPRINTF("%s: pPort->pfProgramStartTransmit = 0x%p\r\n", __FUNCTION__, pPort->pfProgramStartTransmit);
+			if (pPort->pfProgramStartTransmit)
+			{
+				pPort->pfProgramStartTransmit(pPort, pEnd, pIrp->pOutBuffer, 8, pIrp);
+			}
         }
         else
         {
             pEnd->pTxIrp = NULL;
+//            pEnd->pRxIrp = NULL;
         }
     }
 
@@ -1418,32 +1605,32 @@ uint8_t MGC_RunScheduledTransfers(MGC_Port *pPort)
     uint32_t dwLength = 0;
 
     pSlotElement = &(pPort->Schedule.ScheduleSlots);
-    while(pSlotElement)
+    while (pSlotElement)
     {
         pSlot = (MGC_ScheduleSlot *)pSlotElement->pItem;
-        if(pSlot)
+        if (pSlot)
         {
             /* set active if transfer is required */
             dwEffectiveFrame = pPort->dwFrame - pSlot->wFrameOffset;
             /* NOTE: wInterval is guaranteed to be a power of 2 */
             dwFrameBits = pSlot->wInterval | (pSlot->wInterval - 1);
-            if(!pSlot->bIsActive && (pSlot->wInterval == (dwEffectiveFrame & dwFrameBits)))
+            if (!pSlot->bIsActive && (pSlot->wInterval == (dwEffectiveFrame & dwFrameBits)))
             {
                 pSlot->bIsActive = TRUE;
             }
-            if(pSlot->bIsActive)
+            if (pSlot->bIsActive)
             {
                 /* active; prepare slot transfers */
                 pPipeElement = &(pSlot->PipeList);
-                while(pPipeElement)
+                while (pPipeElement)
                 {
                     pPipe = (MGC_Pipe *)pPipeElement->pItem;
-                    if(pPipe)
+                    if (pPipe)
                     {
                         pEnd = pPipe->pLocalEnd;
                         bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
                         bTrafficType = bIsTx ? pEnd->bTrafficType : pEnd->bRxTrafficType;
-                        switch(bTrafficType)
+                        switch (bTrafficType)
                         {
                         case MUSB_ENDPOINT_XFER_INT:
                             pIrp = bIsTx ? (MUSB_Irp *)pEnd->pTxIrp : (MUSB_Irp *)pEnd->pRxIrp;
@@ -1452,12 +1639,12 @@ uint8_t MGC_RunScheduledTransfers(MGC_Port *pPort)
                             pBuffer = pIrp->pBuffer;
                             dwLength = pIrp->dwLength;
                             break;
-#ifdef MUSB_ISO
-                        case MUSB_ENDPOINT_XFER_ISOC:
+#ifdef MUSB_ISOCH
+            case MUSB_ENDPOINT_XFER_ISOCH:
                             pIsochIrp = bIsTx ? (MUSB_IsochIrp *)pEnd->pTxIrp : (MUSB_IsochIrp *)pEnd->pRxIrp;
                             pGenIrp = pIsochIrp;
                             bAllowDma = pIsochIrp->bAllowDma;
-                            if(pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT)
+                            if (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT)
                             {
                                 pBuffer = pIsochIrp->pBuffer + pEnd->dwTxOffset;
                             }
@@ -1469,7 +1656,7 @@ uint8_t MGC_RunScheduledTransfers(MGC_Port *pPort)
                             break;
 #endif
                         }
-                        if(bIsTx)
+                        if (bIsTx)
                         {
                             pPort->pfProgramStartTransmit(pPort, pEnd, pBuffer, dwLength, pGenIrp);
                         }
@@ -1482,7 +1669,7 @@ uint8_t MGC_RunScheduledTransfers(MGC_Port *pPort)
                     pPipeElement = pPipeElement->pNext;
                 }
                 /* check if last frame */
-                if(0 == --pSlot->wFramesRemaining)
+                if (0 == --pSlot->wFramesRemaining)
                 {
                     /* last frame in slot; mark as inactive */
                     pSlot->bIsActive = FALSE;
@@ -1506,14 +1693,16 @@ static void MGC_FreeScheduleContents(MGC_Schedule *pSchedule)
     uint16_t wSlotCount, wPipeCount;
     uint16_t wSlotIndex, wPipeIndex;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     wSlotCount = MUSB_ListLength(&(pSchedule->ScheduleSlots));
-    for(wSlotIndex = 0; wSlotIndex < wSlotCount; wSlotIndex++)
+    for (wSlotIndex = 0; wSlotIndex < wSlotCount; wSlotIndex++)
     {
         pSlot = (MGC_ScheduleSlot *)MUSB_ListFindItem(&(pSchedule->ScheduleSlots), 0);
         MUSB_ListRemoveItem(&(pSchedule->ScheduleSlots), pSlot);
         /* remove pipes but do not free (close frees them) */
         wPipeCount = MUSB_ListLength(&(pSlot->PipeList));
-        for(wPipeIndex = 0; wPipeIndex < wPipeCount; wPipeIndex++)
+        for (wPipeIndex = 0; wPipeIndex < wPipeCount; wPipeIndex++)
         {
             pPipe = (MGC_Pipe *)MUSB_ListFindItem(&(pSlot->PipeList), 0);
             MUSB_ListRemoveItem(&(pSlot->PipeList), pPipe);
@@ -1538,7 +1727,7 @@ static uint32_t MGC_GetSlotTime(MGC_ScheduleSlot *pSlot)
     /* accumulate time taken by all pipes in this slot */
     wPipeIndex = 0;
     pPipe = MUSB_ListFindItem(&(pSlot->PipeList), wPipeIndex++);
-    while(pPipe)
+    while (pPipe)
     {
         dwSlotTime += pPipe->dwMaxBusTime;
         pPipe = MUSB_ListFindItem(&(pSlot->PipeList), wPipeIndex++);
@@ -1566,24 +1755,24 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
 
     /* walk schedule looking for space in existing slot */
     pElement = &(pSchedule->ScheduleSlots);
-    while(pElement)
+    while (pElement)
     {
         /* walk slots looking for compatible interval/duration and available time */
         pSlot = (MGC_ScheduleSlot *)pElement->pItem;
-        if(pSlot)
+        if (pSlot)
         {
             dwOffset = pSlot->wFrameOffset + pSlot->wDuration;
             /* track maximum offset in case we need to try a new slot */
-            if((dwOffset - 1) > wMaxOffset)
+            if ((dwOffset - 1) > wMaxOffset)
             {
                 wMaxOffset = (uint16_t)(dwOffset - 1);
             }
-            if((pSlot->wInterval == wInterval) &&
+            if ((pSlot->wInterval == wInterval) &&
                     (pSlot->wDuration == wDuration))
             {
                 dwSlotTime = MGC_GetSlotTime(pSlot);
                 /* if time remains in this slot, use it */
-                if((dwSlotTime + dwBusTime) <= pBusTimeInfo->dwMaxPeriodic)
+                if ((dwSlotTime + dwBusTime) <= pBusTimeInfo->dwMaxPeriodic)
                 {
                     return pSlot;
                 }
@@ -1593,27 +1782,32 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
     }
 
     /* see if we can create a new slot */
-    if(((dwOffset + wDuration) < pSchedule->wSlotCount) &&
+    if (((dwOffset + wDuration) < pSchedule->wSlotCount) &&
             (dwBusTime <= pBusTimeInfo->dwMaxPeriodic) &&
             (wMaxOffset <= (wInterval >> 1)))
     {
         pSlot = MUSB_MemAlloc(sizeof(MGC_ScheduleSlot));
-        if(pSlot)
+        if (pSlot)
         {
+            MUSB_MemSet(pSlot, 0, sizeof(MGC_ScheduleSlot));
             pSlot->bIsActive = FALSE;
             pSlot->wDuration = wDuration;
             pSlot->wFrameOffset = (uint16_t)dwOffset;
             pSlot->wInterval = wInterval;
             MUSB_ListInit(&(pSlot->PipeList));
-            if(MUSB_ListAppendItem(&(pSchedule->ScheduleSlots), pSlot, 0))
+            if (MUSB_ListAppendItem(&(pSchedule->ScheduleSlots), pSlot, 0))
             {
                 /* update slot count if needed */
-                if(wInterval < pSchedule->wSlotCount)
+                if (wInterval < pSchedule->wSlotCount)
                 {
                     pSchedule->wSlotCount = wInterval;
                 }
                 return pSlot;
             }
+        }
+        else
+        {
+            MUSB_ERR_PRINTF("MGC_FindScheduleSlot: MUSB_MemAlloc failed\r\n");
         }
     }
 
@@ -1633,15 +1827,17 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
 {
     MGC_ScheduleSlot *pSlot = NULL;
 
-    if(!pSchedule->wSlotCount)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    if (!pSchedule->wSlotCount)
     {
         /* no slots; make first one */
         pSlot = MUSB_MemAlloc(sizeof(MGC_ScheduleSlot));
-        if(pSlot)
+        if (pSlot)
         {
             MUSB_MemSet(pSlot, 0, sizeof(MGC_ScheduleSlot));
             MUSB_ListInit(&(pSlot->PipeList));
-            if(MUSB_ListAppendItem(&(pSchedule->ScheduleSlots), pSlot, 0))
+            if (MUSB_ListAppendItem(&(pSchedule->ScheduleSlots), pSlot, 0))
             {
                 pSchedule->wSlotCount = 1;
             }
@@ -1651,6 +1847,10 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
                 pSlot = NULL;
             }
         }
+    else
+    {
+        MUSB_ERR_PRINTF("MGC_FindScheduleSlot: MUSB_MemAlloc failed\r\n");
+    }
     }
     else
     {
@@ -1658,10 +1858,10 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
         pSlot = (MGC_ScheduleSlot *)MUSB_ListFindItem(&(pSchedule->ScheduleSlots), 0);
     }
 
-    if(pSlot)
+    if (pSlot)
     {
         MUSB_PRT("dwTotalTime[%x]dwBusTime[%x]dwMaxPeriodic[%x]\r\n", pSchedule->dwTotalTime, dwBusTime, pBusTimeInfo->dwMaxPeriodic);
-        if((pSchedule->dwTotalTime + dwBusTime) <= pBusTimeInfo->dwMaxPeriodic)
+        if ((pSchedule->dwTotalTime + dwBusTime) <= pBusTimeInfo->dwMaxPeriodic)
         {
             pSchedule->dwTotalTime += dwBusTime;
         }
@@ -1674,13 +1874,15 @@ static MGC_ScheduleSlot *MGC_FindScheduleSlot(MGC_Schedule *pSchedule,
 
     return pSlot;
 }
-#endif	/* MUSB_SCHEDULER */
+#endif    /* MUSB_SCHEDULER */
 
 static uint32_t MGC_ComputeBandwidth(MGC_BusTimeInfo *pBusTimeInfo,
                                      uint8_t bTrafficType, uint8_t bIsIn, uint16_t wMaxPacketSize)
 {
     uint32_t dwBusTime;
     uint32_t dwBitStuffTime;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     dwBusTime = pBusTimeInfo->dwControllerSetup;
 
@@ -1694,11 +1896,11 @@ static uint32_t MGC_ComputeBandwidth(MGC_BusTimeInfo *pBusTimeInfo,
     /* Add payload-dependent time term */
     dwBusTime += (pBusTimeInfo->dwPayloadScale * dwBitStuffTime) / 10;
 
-    switch(bTrafficType)
+    switch (bTrafficType)
     {
-    case MUSB_ENDPOINT_XFER_ISOC:
+    case MUSB_ENDPOINT_XFER_ISOCH:
         /* Additional time term */
-        if(bIsIn)
+        if (bIsIn)
         {
             dwBusTime += pBusTimeInfo->dwIsoInOverhead;
         }
@@ -1709,7 +1911,7 @@ static uint32_t MGC_ComputeBandwidth(MGC_BusTimeInfo *pBusTimeInfo,
         break;
     default:
         /* Additional time term */
-        if(bIsIn)
+        if (bIsIn)
         {
             dwBusTime += pBusTimeInfo->dwInOverhead;
         }
@@ -1758,12 +1960,14 @@ static uint8_t MGC_CommitBandwidth(MGC_Port *pPort, MGC_Pipe *pPipe,
     uint8_t bIsIn = (pRemoteEnd->UsbDescriptor.bEndpointAddress & MUSB_DIR_IN) ? TRUE : FALSE;
     uint16_t wInterval = bInterval;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* compute needed bandwidth */
-    if(pPort->bIsHighSpeed)
+    if (pPort->bIsHighSpeed)
     {
         pBusTimeInfo = &MGC_HighSpeedFrame;
     }
-    else if(pPort->bIsLowSpeed)
+    else if (pPort->bIsLowSpeed)
     {
         pBusTimeInfo = &MGC_LowSpeedFrame;
     }
@@ -1772,23 +1976,23 @@ static uint8_t MGC_CommitBandwidth(MGC_Port *pPort, MGC_Pipe *pPipe,
         pBusTimeInfo = &MGC_FullSpeedFrame;
     }
 
-    switch(pRemoteEnd->pDevice->ConnectionSpeed)
+    switch (pRemoteEnd->pDevice->ConnectionSpeed)
     {
     case MUSB_CONNECTION_SPEED_HIGH:
         pLocalBusTimeInfo = &MGC_HighSpeedFrame;
         wDuration = (MUSB_SWAP16P((uint8_t *) & (pRemoteEnd->UsbDescriptor.wMaxPacketSize)) & MUSB_M_ENDPOINT_PACKETS_PER_FRAME) >>
                     MUSB_S_ENDPOINT_PACKETS_PER_FRAME;
-        if(!wDuration)
+        if (!wDuration)
         {
             wDuration = 1;
         }
 
-        if((bTrafficType == MUSB_ENDPOINT_XFER_ISOC) || (bTrafficType == MUSB_ENDPOINT_XFER_INT))
+        if ((bTrafficType == MUSB_ENDPOINT_XFER_ISOCH)||(bTrafficType == MUSB_ENDPOINT_XFER_INT))
             wInterval = 1 << (bInterval - 1);
         break;
     case MUSB_CONNECTION_SPEED_FULL:
         pLocalBusTimeInfo = &MGC_FullSpeedFrame;
-        if(bTrafficType == MUSB_ENDPOINT_XFER_ISOC)
+        if (bTrafficType == MUSB_ENDPOINT_XFER_ISOCH)
             wInterval = 1 << (bInterval - 1);
         break;
     case MUSB_CONNECTION_SPEED_LOW:
@@ -1808,36 +2012,36 @@ static uint8_t MGC_CommitBandwidth(MGC_Port *pPort, MGC_Pipe *pPipe,
     /*
      * Verify that the needed bandwidth fits.
      */
-    switch(bTrafficType)
+    switch (bTrafficType)
     {
-    case MUSB_ENDPOINT_XFER_ISOC:
+    case MUSB_ENDPOINT_XFER_ISOCH:
     case MUSB_ENDPOINT_XFER_INT:
         pSchedule = &(pPort->Schedule);
         pSlot = MGC_FindScheduleSlot(pSchedule, pBusTimeInfo, wInterval,
                                      wDuration, dwBusTime);
-        if(pSlot)
+        if (pSlot)
         {
             bOk = TRUE;
 #ifdef MUSB_HUB
-            if(pDevice->pParentUsbDevice)
+            if (pDevice->pParentUsbDevice)
             {
                 pImplDevice = (MGC_Device *)pDevice->pParentUsbDevice->pPrivateData;
                 pSchedule = pImplDevice->pSchedule;
-                if(!pSchedule)
+                if (!pSchedule)
                 {
                     pSchedule = MUSB_MemAlloc(sizeof(MGC_Schedule));
-                    if(pSchedule)
+                    if (pSchedule)
                     {
                         pImplDevice->pSchedule = pSchedule;
                         MUSB_MemSet(pSchedule, 0, sizeof(MGC_Schedule));
                         MUSB_ListInit(&(pSchedule->ScheduleSlots));
                     }
                 }
-                if(pSchedule)
+                if (pSchedule)
                 {
                     pLocalSlot = MGC_FindScheduleSlot(pSchedule,
                                                       pLocalBusTimeInfo, wInterval, wDuration, dwBusTime);
-                    if(pLocalSlot)
+                    if (pLocalSlot)
                     {
                         bOk = MUSB_ListAppendItem(&(pLocalSlot->PipeList), pPipe, 0);
                     }
@@ -1852,7 +2056,7 @@ static uint8_t MGC_CommitBandwidth(MGC_Port *pPort, MGC_Pipe *pPipe,
                 }
             }
 #endif
-            if(bOk)
+            if (bOk)
             {
                 bOk = MUSB_ListAppendItem(&(pSlot->PipeList), pPipe, 0);
                 pPipe->pSlot = pSlot;
@@ -1868,7 +2072,7 @@ static uint8_t MGC_CommitBandwidth(MGC_Port *pPort, MGC_Pipe *pPipe,
         break;
     }
 
-    if(bOk)
+    if (bOk)
     {
         pPipe->dwMaxBusTime = dwBusTime;
         pPipe->bTrafficType = bTrafficType;
@@ -1896,6 +2100,8 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
     MGC_Device *pImplDevice = (MGC_Device *)pDevice->pPrivateData;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* lock */
     pServices->pfLock(pServices->pPrivateData, 0);
 
@@ -1904,13 +2110,13 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
 
     /* try to allocate */
     pPipe = (MGC_Pipe *)MUSB_MemAlloc(sizeof(MGC_Pipe));
-    if(pPipe)
+    if (pPipe)
     {
         /* allocated pipe; fill info */
         MUSB_MemSet(pPipe, 0, sizeof(MGC_Pipe));
         pPipe->hSession = hBus;
         pPipe->pPort = pPort;
-        if(pRemoteEnd->UsbDescriptor.bEndpointAddress & MUSB_DIR_IN)
+        if (pRemoteEnd->UsbDescriptor.bEndpointAddress & MUSB_DIR_IN)
         {
             pPipe->bmFlags = MGC_PIPEFLAGS_HOST;
             bIsTx = FALSE;
@@ -1923,7 +2129,7 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
         pPipe->pDevice = pDevice;
 
         /* try to get core resource */
-        if(!pLocalEnd)
+        if (!pLocalEnd)
         {
             end.bmFlags = 0;
             end.dwBufferSize = pRemoteEnd->UsbDescriptor.wMaxPacketSize;
@@ -1935,14 +2141,14 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
             pResource = pPort->pfBindEndpoint(pPort, pRemoteEnd, pLocalEnd, TRUE);
         }
 
-        if(pResource)
+        if (pResource)
         {
             /* got resource; try to get bandwidth if applicable */
             bBandwidthOk = MGC_CommitBandwidth(pPort, pPipe, pRemoteEnd);
         }
 
         /* if all OK so far, try to add pipe to device pipe list */
-        if(pResource && bBandwidthOk &&
+        if (pResource && bBandwidthOk &&
                 MUSB_ListAppendItem(&(pImplDevice->PipeList), pPipe, 0))
         {
             /* success */
@@ -1952,9 +2158,9 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
         else
         {
             /* failure cleanup */
-            if(pResource)
+            if (pResource)
             {
-                if(bIsTx)
+                if (bIsTx)
                 {
                     pResource->bIsClaimed = FALSE;
                 }
@@ -1970,6 +2176,10 @@ MUSB_PipePtr MUSB_OpenPipe(MUSB_BusHandle hBus,
             }
             MUSB_MemFree(pPipe);
         }
+    }
+    else
+    {
+        MUSB_ERR_PRINTF("MUSB_OpenPipe: MUSB_MemAlloc failed\r\n");
     }
 
     /* unlock */
@@ -1993,13 +2203,15 @@ uint32_t MUSB_ClosePipe(MUSB_PipePtr hPipe)
     MGC_EndpointResource *pEnd = pPipe->pLocalEnd;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /* lock */
     pServices->pfLock(pServices->pPrivateData, 0);
 
     pPipe->bmFlags |= MGC_PIPEFLAGS_CLOSING;
 
     bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
-    if(pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
+    if (pPipe->bmFlags & MGC_PIPEFLAGS_HOST)
     {
         bDirection = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ?
                      MUSB_DIR_OUT : MUSB_DIR_IN;
@@ -2015,7 +2227,7 @@ uint32_t MUSB_ClosePipe(MUSB_PipePtr hPipe)
         dwStatus = pPort->pfProgramFlushEndpoint(pPort, pEnd, bDirection, TRUE);
     }
 
-    if(pPipe->pSlot)
+    if (pPipe->pSlot)
     {
         MUSB_ListRemoveItem(&(pPipe->pSlot->PipeList), pPipe);
     }
@@ -2023,7 +2235,7 @@ uint32_t MUSB_ClosePipe(MUSB_PipePtr hPipe)
     MUSB_MemSet(pPipe, 0, sizeof(MGC_Pipe));
     MUSB_MemFree(pPipe);
 
-    if(bIsTx)
+    if (bIsTx)
     {
         pEnd->bIsClaimed = FALSE;
     }
@@ -2048,41 +2260,45 @@ uint32_t MUSB_StartControlTransfer(MUSB_Port *pPort, MUSB_ControlIrp *pIrp)
     MUSB_SystemServices *pServices = pImplPort->pController->pSystemServices;
     MGC_EndpointResource *pEnd = NULL;
 
-    MUSB_PRT("\r\n MUSB_StartControlTransfer\r\n");
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 
     pIrp->dwActualInLength = pIrp->dwActualOutLength = 0;
     pIrp->dwStatus = MUSB_STATUS_OK;
 
     /* lock EP0 */
+    // MGC_NoneLock()
     pServices->pfLock(pServices->pPrivateData, 1);
 
     /* NOTE: assumes EP0 is first */
     pEnd = MUSB_ArrayFetch(&(pImplPort->LocalEnds), 0);
-    if(pEnd)
+    MUSB_DPRINTF("MUSB_StartControlTransfer: pEnd = 0x%p, pEnd->pTxIrp = 0x%p\r\n", pEnd, pEnd->pTxIrp);
+    if (pEnd)
     {
-        if(!pEnd->pTxIrp)
+        if (!pEnd->pTxIrp)
         {
             pEnd->bIsTx = TRUE;
             pEnd->wPacketSize = pIrp->pDevice->DeviceDescriptor.bMaxPacketSize0;
-            if(!pEnd->wPacketSize)
+            if (!pEnd->wPacketSize)
             {
                 pEnd->wPacketSize = 8;
             }
-            if (pImplPort->pfProgramStartTransmit)
+            if (pImplPort->pfProgramStartTransmit != NULL)
             {
-                status = pImplPort->pfProgramStartTransmit(pImplPort, pEnd,
-                         pIrp->pOutBuffer, 8, pIrp);
+            	// MGC_FdrcStartTx()
+            	status = pImplPort->pfProgramStartTransmit(pImplPort, pEnd,
+            				pIrp->pOutBuffer, 8, pIrp);
             }
         }
         else
         {
-            if(!MUSB_ListAppendItem(&(pEnd->TxIrpList), pIrp, 0))
+            if (!MUSB_ListAppendItem(&(pEnd->TxIrpList), pIrp, 0))
             {
                 status = MUSB_STATUS_NO_MEMORY;
             }
         }
     }
     /* unlock EP0 */
+    // MGC_NoneUnlock()
     pServices->pfUnlock(pServices->pPrivateData, 1);
 
     return status;
@@ -2104,15 +2320,20 @@ uint32_t MUSB_CancelControlTransfer(MUSB_Port *pPort, MUSB_ControlIrp *pIrp)
     pIrp->dwStatus = MUSB_STATUS_OK;
 
     /* lock EP0 */
-    pServices->pfLock(pServices->pPrivateData, 1);
+    if (pServices->pfLock)
+    {
+        // MGC_NoneLock()
+        pServices->pfLock(pServices->pPrivateData, 1);
+    }
 
     /* NOTE: assumes EP0 is first */
     pEnd = MUSB_ArrayFetch(&(pImplPort->LocalEnds), 0);
-    if(pEnd)
+    if (pEnd)
     {
-        if(pEnd->pTxIrp == pIrp)
+        if (pEnd->pTxIrp == pIrp)
         {
             /* it is the current IRP: flush, remove, start next */
+			MUSB_DPRINTF("%s: pImplPort->pfProgramFlushEndpoint = 0x%p\r\n", __FUNCTION__, pImplPort->pfProgramFlushEndpoint);
             if (pImplPort->pfProgramFlushEndpoint)
             {
                 pImplPort->pfProgramFlushEndpoint(pImplPort, pEnd, 0, FALSE);
@@ -2125,10 +2346,10 @@ uint32_t MUSB_CancelControlTransfer(MUSB_Port *pPort, MUSB_ControlIrp *pIrp)
         {
             /* not the current IRP; try to find in list */
             wCount = MUSB_ListLength(&(pEnd->TxIrpList));
-            for(wIndex = 0; wIndex < wCount; wIndex++)
+            for (wIndex = 0; wIndex < wCount; wIndex++)
             {
                 pListIrp = MUSB_ListFindItem(&(pEnd->TxIrpList), wIndex);
-                if(pListIrp == pIrp)
+                if (pListIrp == pIrp)
                 {
                     MUSB_ListRemoveItem(&(pEnd->TxIrpList), pListIrp);
                 }
@@ -2139,20 +2360,23 @@ uint32_t MUSB_CancelControlTransfer(MUSB_Port *pPort, MUSB_ControlIrp *pIrp)
     /* unlock EP0 */
     pServices->pfUnlock(pServices->pPrivateData, 1);
 
+    MUSB_DPRINTF("%s: status = 0x%x\r\n", __FUNCTION__, status);
     return status;
 }
 
-#ifdef MUSB_ISO
+#ifdef MUSB_ISOCH
 uint32_t MUSB_AdjustIsochTransfer(
     int16_t wFrameAdjustment, MUSB_IsochIrp *pIsochIrp)
 {
     MGC_Pipe *pPipe = (MGC_Pipe *)pIsochIrp->hPipe;
 
-    if(wFrameAdjustment >= 0)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    if (wFrameAdjustment >= 0)
     {
         pPipe->pLocalEnd->dwWaitFrameCount += wFrameAdjustment;
     }
-    else if(pPipe->pLocalEnd->dwWaitFrameCount > wFrameAdjustment)
+    else if (pPipe->pLocalEnd->dwWaitFrameCount > wFrameAdjustment)
     {
         pPipe->pLocalEnd->dwWaitFrameCount -= wFrameAdjustment;
     }
@@ -2170,7 +2394,9 @@ static void MGC_DriverTimerExpired(void *pControllerPrivateData)
     MGC_Port *pPort = pController->pPort;
     void *pParam = pPort->pDriverTimerData;
 
-    if(pPort->pfDriverTimerExpired)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    if (pPort->pfDriverTimerExpired)
     {
         pPort->pDriverTimerData = NULL;
         pPort->pfDriverTimerExpired(pParam, pPort);
@@ -2185,11 +2411,13 @@ uint32_t MUSB_ArmTimer(MUSB_BusHandle hBus, MUSB_DeviceDriver *pDriver,
     MGC_Port *pPort = (MGC_Port *)hBus;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     /*
      * For now, support only one, and borrow the OTG timer
      * (since it better not be active at this time)
      */
-    if(pPort->pDriverTimerData)
+    if (pPort->pDriverTimerData)
     {
         return MUSB_STATUS_NO_RESOURCES;
     }
@@ -2207,6 +2435,8 @@ uint32_t MUSB_CancelTimer(MUSB_BusHandle hBus,
     MGC_Port *pPort = (MGC_Port *)hBus;
     MUSB_SystemServices *pServices = pPort->pController->pSystemServices;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
     pServices->pfCancelTimer(pServices->pPrivateData, 0);
 
     return 0;
@@ -2214,9 +2444,11 @@ uint32_t MUSB_CancelTimer(MUSB_BusHandle hBus,
 
 uint32_t MGC_HostSetMaxPower(MGC_Port *pPort, uint16_t wPower)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
 #ifdef MUSB_OTG
     pPort->pfReadBusState(pPort);
-    if(!pPort->bConnectorId)
+    if (!pPort->bConnectorId)
     {
 #endif
 
@@ -2228,4 +2460,4 @@ uint32_t MGC_HostSetMaxPower(MGC_Port *pPort, uint16_t wPower)
     return MUSB_STATUS_UNSUPPORTED;
 }
 
-#endif	/* host or OTG */
+#endif    /* host or OTG */

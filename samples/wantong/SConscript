@@ -1,0 +1,15 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+
+
+from building import *
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+
+libs = ['vtbk']
+libpath = [cwd]
+
+group = DefineGroup('wantong', src, depend = [''], LIBS = libs, LIBPATH = libpath)
+
+Return('group')

@@ -20,6 +20,7 @@
 /*
 * implementation
 */
+#if 0
 int MUSB_BitsGet(const uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
                  uint32_t *pdwResult)
 {
@@ -30,15 +31,15 @@ int MUSB_BitsGet(const uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
     uint8_t bTopBit = bOffset + bCount;
     int iError = 0;
 
-    if(pBuffer && pdwResult)
+    if (pBuffer && pdwResult)
     {
-        if((bTopBit <= 32) && (bOffset < 8))
+        if ((bTopBit <= 32) && (bOffset < 8))
         {
             /* gather/mask, avoiding *, / or large left shifts */
             bTopByte = (bTopBit - 1) >> 3;
             bTopBits = 8 - (((bTopByte + 1) << 3) - bTopBit);
             bByte = (int8_t)bTopByte;
-            if(bTopBits)
+            if (bTopBits)
             {
                 dwTemp = pBuffer[bByte--] & ~(0xff << bTopBits);
             }
@@ -46,7 +47,7 @@ int MUSB_BitsGet(const uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
             {
                 dwTemp = pBuffer[bByte--];
             }
-            for(; bByte >= 0; bByte--)
+            for (; bByte >= 0; bByte--)
             {
                 dwTemp <<= 8;
                 dwTemp |= pBuffer[bByte];
@@ -80,9 +81,9 @@ int MUSB_BitsSet(uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
     uint8_t bTopBit = bOffset + bCount;
     int iError = 0;
 
-    if(pBuffer)
+    if (pBuffer)
     {
-        if((bTopBit > 32) || (bOffset > 7) || !bCount)
+        if ((bTopBit > 32) || (bOffset > 7) || !bCount)
         {
             iError = -2;
         }
@@ -96,7 +97,7 @@ int MUSB_BitsSet(uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
             /* compute mask of bits to set */
             bMask = 0xff << bOffset;
             /* see if we are within one byte */
-            if(!bTopByte)
+            if (!bTopByte)
             {
                 /* special case */
                 bMask &= ~(0xff << bTopBits);
@@ -106,10 +107,10 @@ int MUSB_BitsSet(uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
             /* set new bits */
             *pBuffer |= (uint8_t)(dwTemp & bMask);
 
-            for(bByte = 1; bByte < bTopByte + 1; bByte++)
+            for (bByte = 1; bByte < bTopByte + 1; bByte++)
             {
                 dwTemp >>= 8;
-                if(bByte == bTopByte)
+                if (bByte == bTopByte)
                 {
                     /* compute mask */
                     bMask = ~(0xff << bTopBits);
@@ -132,3 +133,4 @@ int MUSB_BitsSet(uint8_t *pBuffer, uint8_t bOffset, uint8_t bCount,
     }
     return (iError);
 }
+#endif

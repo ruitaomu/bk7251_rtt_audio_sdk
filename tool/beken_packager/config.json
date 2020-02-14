@@ -4,7 +4,7 @@
     "count": 2,
     "section": [
         {
-            "firmware": "bootloader_7251_2M_uart2_20190529.bin",
+            "firmware": "bootloader_7251_uart2_20191211.bin",
             "version": "2M.1220",
             "partition": "bootloader",
             "start_addr": "0x00000000",
@@ -15,7 +15,7 @@
             "version": "2M.1220",
             "partition": "app",
             "start_addr": "0x00011000",
-            "size": "1292K"
+            "size": "1224K"
         }
 
     ]

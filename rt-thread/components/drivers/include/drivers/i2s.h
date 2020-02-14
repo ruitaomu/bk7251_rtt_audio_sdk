@@ -15,6 +15,8 @@ extern "C" {
 #define RT_DEVICE_CTRL_I2S_DMA_RX_ENABLE 1
 #define RT_DEVICE_CTRL_I2S_DMA_TX_ENABLE 2
 #define RT_DEVICE_CTRL_I2S_DMA_MASTER_ENABLE 3
+#define RT_DEVICE_CTRL_I2S_SAMPLE_RATE_SET 4
+#define RT_DEVICE_CTRL_I2S_BIT_LENGTH_SET 5
 
 struct rt_i2s_msg
 {
@@ -54,8 +56,10 @@ struct rt_i2s_bus_device
     char *rx_fifo;
     RB_DMA_WR_ST rb_dma_wr;
 
-    /* flags */
-    rt_uint16_t open_flag:1;
+    /* common members */
+    rt_uint32_t sample_rate;
+    rt_uint16_t bits_length;
+    rt_uint16_t open_flag;
     rt_uint16_t dbg_flag:1;
 	rt_uint16_t tx_paused:1;
 	rt_uint16_t tx_enabled:1;

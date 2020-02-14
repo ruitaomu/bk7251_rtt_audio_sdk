@@ -162,3 +162,4 @@ __inline uint16_t MGC_ReadRxCount(MGC_Controller *pController)
 #define MGC_VBUS_MASK            0x70    /* Power D6 - D4 */
 
 #endif	/* multiple inclusion protection */
+

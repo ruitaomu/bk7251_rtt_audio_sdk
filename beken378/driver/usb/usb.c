@@ -2,6 +2,8 @@
 #include "typedef.h"
 #include "arm_arch.h"
 
+#include "sys_ctrl.h"
+
 #include "usb_pub.h"
 #include "usb.h"
 
@@ -34,6 +36,8 @@ uint32_t usb_connected_flag = 0;
 #else
 #endif
 
+#define GUWENFU_SETTING
+
 static DD_OPERATIONS usb_op =
 {
     usb_open,
@@ -49,10 +53,9 @@ FUNCPTR usb_connected_cb = 0;
 /*******************************************************************/
 void usb_init(void)
 {
+    USB_PRT("usb_init\r\n");
     intc_service_register(IRQ_USB, PRI_IRQ_USB, usb_isr);
     ddev_register_dev(USB_DEV_NAME, &usb_op);
-
-    USB_PRT("usb_init\r\n");
 }
 
 void usb_exit(void)
@@ -121,6 +124,16 @@ UINT32 usb_sw_open(void)
 {
     OSStatus ret = USB_SUCCESS;
 
+    if(NULL == ubg_semaphore)
+    {
+        ret = bk_rtos_init_semaphore(&ubg_semaphore, 10);
+        if (kNoErr != ret)
+        {
+            USB_PRT("create background sema failed\r\n");
+            goto sw_open_exit;
+        }
+    }
+
     if(NULL == ubg_thread_handle)
     {
         /* usb backgroud thread create*/
@@ -137,17 +150,8 @@ UINT32 usb_sw_open(void)
         }
     }
 
-    if(NULL == ubg_semaphore)
-    {
-        ret = bk_rtos_init_semaphore(&ubg_semaphore, 10);
-        if (kNoErr != ret)
-        {
-            USB_PRT("create background sema failed\r\n");
-            goto sw_open_exit;
-        }
-    }
-
 sw_open_exit:
+    USB_PRT("usb_sw_open: ret = 0x%x\r\n", ret);
     return ret;
 }
 
@@ -187,15 +191,18 @@ UINT32 usb_open (UINT32 op_flag)
     param = PWD_USB_CLK_BIT;
     sddev_control(ICU_DEV_NAME, CMD_CLK_PWR_UP, &param);
 
+#ifndef GUWENFU_SETTING
     VREG_USB_TEST_MODE = 0x01;
+#endif
 
 #ifdef GUWENFU_SETTING
     VREG_USB_INTRRX1E = 0x0;
     VREG_USB_INTRTX1E = 0x0;
     VREG_USB_INTRUSBE = 0x0;
     REG_AHB2_USB_VTH &= ~(1 << 7);
-#endif // 
+#endif
 
+#ifndef GUWENFU_SETTING
 #ifdef MUSB_FORCE_FULLSPEED
     VREG_USB_POWER = 0x01;
 #else
@@ -204,17 +211,21 @@ UINT32 usb_open (UINT32 op_flag)
 
     VREG_USB_FADDR = 0;
     VREG_USB_DEVCTL = 0x01;
+#endif
+
 
 #ifdef GUWENFU_SETTING
     if (usb_mode == USB_HOST_MODE)
     {
-        USB_PRT("usb host\r\n");
+        os_printf("usb host\r\n");
+        REG_WRITE(SCTRL_ANALOG_CTRL2, REG_READ(SCTRL_ANALOG_CTRL2) & (~(1 << 25)));
         REG_AHB2_USB_OTG_CFG = 0x50;        // host
         REG_AHB2_USB_DEV_CFG = 0x00;
     }
     else
     {
-        USB_PRT("usb device\r\n");
+        os_printf("usb device\r\n");
+        REG_WRITE(SCTRL_ANALOG_CTRL2, REG_READ(SCTRL_ANALOG_CTRL2) | (1 << 25));
         VREG_USB_INTRRX1E = 0x07;
         VREG_USB_INTRTX1E = 0x07;
         VREG_USB_INTRUSBE = 0x3F;
@@ -232,8 +243,14 @@ UINT32 usb_open (UINT32 op_flag)
     /*dp and dn driver current selection*/
     REG_AHB2_USB_GEN = (0x7 << 4) | (0x7 << 0);
 #endif
+
+
 #if CFG_USB
-    if (usb_sw_init())
+    if (usb_sw_init() == 0)
+    {
+        os_printf("usb_sw_init OK\r\n");
+    }
+    else
     {
         os_printf("usb_sw_init ERROR\r\n");
     }
@@ -241,7 +258,7 @@ UINT32 usb_open (UINT32 op_flag)
     ret = usb_sw_open();
     ASSERT(USB_SUCCESS == ret);
 
-    os_printf("usb_sw_init OK\r\n");
+//    os_printf("usb_sw_init OK\r\n");
 #endif
 
     /*step2: interrupt setting about usb*/
@@ -399,6 +416,7 @@ UINT32 usb_ctrl(UINT32 cmd, void *param)
 
 void usb_isr(void)
 {
+//    os_printf("usb_isr\r\n");
     MGC_AfsUdsIsr();
 }
 

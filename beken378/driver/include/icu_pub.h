@@ -159,7 +159,11 @@ enum
 #else
 #define TIMER_ARM_WAKEUP_EN_BIT                         (1 << 8)
 #endif
+#define BLE_ARM_WAKEUP_EN_BIT                       	 (1 << 30) 
 #define MAC_ARM_WAKEUP_EN_BIT                       	 (1 << 26) 
+#define MAC_GENERAL_ARM_WAKEUP_EN_BIT                    (1 << 22) 
+#define GENERDMA_ARM_WAKEUP_EN_BIT                      (1 << 15)
+#define AUDIO_ARM_WAKEUP_EN_BIT                         (1 << 10)
 #define GPIO_ARM_WAKEUP_EN_BIT                          (1 << 7)
 #define PWM_ARM_WAKEUP_EN_BIT                           (1 << 9)
 #define UART2_ARM_WAKEUP_EN_BIT                         (1 << 1)

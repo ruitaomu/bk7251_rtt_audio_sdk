@@ -473,10 +473,12 @@ void delay100us(INT32 num)
 
 
 #define CAL_WR_TRXREGS(reg)    do{\
+                                    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();\
                                     while(BK7011RCBEKEN.REG0x1->value & (0x1 << reg));\
                                     BK7011TRXONLY.REG##reg->value = BK7011TRX.REG##reg->value;\
                                     cal_delay(6);\
                                     while(BK7011RCBEKEN.REG0x1->value & (0x1 << reg));\
+                                    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();\
                                 }while(0)
 
 
@@ -1161,6 +1163,7 @@ void rwnx_cal_set_txpwr(UINT32 pwr_gain, UINT32 grate)
     CAL_PRT("idx:%02d,r:%03d- pg:%02x, %01x, %01x, %01x, %01x, %01x\r\n", pwr_gain, grate,
         pcfg->pregain, pcfg->regb_28_31, pcfg->regc_8_10,pcfg->regc_4_6, pcfg->regc_0_2, pcfg->rega_8_11);
 
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
     BK7011RCBEKEN.REG0x52->bits.TXPREGAIN = gtx_pre_gain = pcfg->pregain;
     bk7011_rc_val[21] = BK7011RCBEKEN.REG0x52->value;
 
@@ -1176,7 +1179,8 @@ void rwnx_cal_set_txpwr(UINT32 pwr_gain, UINT32 grate)
     BK7011TRX.REG0xC->bits.dgainbuf20 = pcfg->regc_4_6;
     BK7011TRX.REG0xC->bits.dgainPA20 = pcfg->regc_8_10;     
     CAL_WR_TRXREGS(0xC);
-    bk7011_trx_val[12] = BK7011TRXONLY.REG0xC->value ;    
+    bk7011_trx_val[12] = BK7011TRXONLY.REG0xC->value ;
+    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();    
 }   
 
 void rwnx_cal_set_reg_mod_pa(UINT16 reg_mod, UINT16 reg_pa)

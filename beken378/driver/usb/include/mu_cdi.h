@@ -67,7 +67,7 @@ typedef enum
 typedef enum
 {
     /** Powered off */
-    MUSB_POWER_OFF,
+    MUSB_POWER_OFF = 0,
     /** USB Powered state */
     MUSB_POWERED,
     /** USB Default state */
@@ -151,61 +151,61 @@ typedef enum
     /**
      * Silently skipped; allows padding for cleaner-looking static declarations
      */
-    MUSB_TARGET_UNKNOWN,
+    MUSB_TARGET_UNKNOWN,	/* 0 */
 
     /** Match a VID; followed by 2-byte VID (USB byte order) */
-    MUSB_TARGET_VID,
+    MUSB_TARGET_VID,		/* 1 */
 
     /** Match a PID; followed by 2-byte PID (USB byte order) */
-    MUSB_TARGET_PID,
+    MUSB_TARGET_PID,		/* 2 */
 
     /**
      * Match a Device BCD code;
      * followed by 2-byte Device BCD code (USB byte order)
      */
-    MUSB_TARGET_DEVICE_BCD,
+    MUSB_TARGET_DEVICE_BCD,	/* 3 */
 
     /**
      * Match the existence of a non-primary configuration and
      * traverse to it; followed by 1-byte config index
      */
-    MUSB_TARGET_CONFIG,
+    MUSB_TARGET_CONFIG,		/* 4 */
 
     /**
-     * Match the existence of an interface and traverse to it;
+     * Match the existence of an interface and traverse to it; 
      * followed by 1-byte interface number
      */
-    MUSB_TARGET_INTERFACE,
+    MUSB_TARGET_INTERFACE,	/* 5 */
 
     /**
      * Match a class at the current level (device or interface);
      * followed by 1-byte class code
      */
-    MUSB_TARGET_CLASS,
+    MUSB_TARGET_CLASS,		/* 6 */
 
     /**
      * Match a subclass at the current level (device or interface);
      * followed by 1-byte subclass code
      */
-    MUSB_TARGET_SUBCLASS,
+    MUSB_TARGET_SUBCLASS,	/* 7 */
 
     /**
      * Match a protocol at the current level (device or interface);
      * followed by 1-byte protocol code
      */
-    MUSB_TARGET_PROTOCOL,
+    MUSB_TARGET_PROTOCOL,	/* 8 */
 
     /**
      * Accept a target meeting previously-encountered criteria;
      * followed by a 1-byte array index into the host client array.
      */
-    MUSB_TARGET_ACCEPT,
+    MUSB_TARGET_ACCEPT,		/* 9 */
 
     /**
      * Reject a target meeting previously-encountered criteria;
      * move on to next list item
      */
-    MUSB_TARGET_REJECT
+    MUSB_TARGET_REJECT		/* 10 */
 
 } MUSB_TargetListCode;
 

@@ -64,7 +64,6 @@ typedef struct
 {
     MGC_Controller ControllerImpl;
     MUSB_Controller Controller;
-
     MGC_Port PortImpl;
     MUSB_Port Port;
 } MGC_ControllerWrapper;
@@ -96,6 +95,7 @@ uint8_t MGC_bDiagLevel = MUSB_DIAG;
  */
 void MUSB_SetDiagnosticLevel(uint8_t bLevel)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #if MUSB_DIAG > 0
     MGC_bDiagLevel = bLevel;
 #endif
@@ -105,6 +105,7 @@ static void MGC_ControllerInit(MGC_ControllerWrapper *pWrapper,
                                void *pControllerAddressIsr,
                                void *pControllerAddressIst)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pWrapper->ControllerImpl.pControllerAddressIsr = pControllerAddressIsr;
     pWrapper->ControllerImpl.pControllerAddressIst = pControllerAddressIst;
     pWrapper->ControllerImpl.pPort = &(pWrapper->PortImpl);
@@ -134,40 +135,41 @@ static uint16_t MGC_DiscoverController(void *pBase)
 #endif
     uint16_t wType = 0;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_AHB_ID
     bData = MGC_Read8(pBase, 0x400);
-    if('M' == bData)
+    if ('M' == bData)
     {
         wType = MUSB_CONTROLLER_MHDRC;
     }
     else
     {
         bData2 = MGC_Read8(pBase, 0x401);
-        if('H' == bData)
+        if ('H' == bData)
         {
-            if('D' == bData2)
+            if ('D' == bData2)
             {
                 wType = MUSB_CONTROLLER_HDRC;
             }
             else
             {
                 bData2 = MGC_Read8(pBase, 0x402);
-                if('F' == bData2)
+                if ('F' == bData2)
                 {
                     wType = MUSB_CONTROLLER_HSFC;
                 }
             }
         }
-        else if('F' == bData)
+        else if ('F' == bData)
         {
-            if('D' == bData2)
+            if ('D' == bData2)
             {
                 wType = MUSB_CONTROLLER_FDRC;
             }
             else
             {
                 bData2 = MGC_Read8(pBase, 0x402);
-                if('F' == bData2)
+                if ('F' == bData2)
                 {
                     wType = MUSB_CONTROLLER_FSFC;
                 }
@@ -186,8 +188,7 @@ static uint16_t MGC_DiscoverController(void *pBase)
 MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
                                     uint16_t wControllerType,
                                     void *pControllerAddressIsr,
-                                    void *pControllerAddressBsr
-                                   )
+                                    void *pControllerAddressBsr)
 {
 #ifdef MUSB_STATS
     void *pOverheads;
@@ -200,8 +201,9 @@ MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
     uint16_t wType = wControllerType;
     static MGC_ControllerWrapper pWrapper;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MUSB_MemSet(&pWrapper, 0, sizeof(MGC_ControllerWrapper));
-    if(!MUSB_ListAppendItem(&MGC_ControllerList, &pWrapper, 0))
+    if (!MUSB_ListAppendItem(&MGC_ControllerList, &pWrapper, 0))
     {
     }
     else
@@ -215,13 +217,15 @@ MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
                        pControllerAddressBsr);
 
     /* discover controller type if not given */
-    if(!wType)
+    MUSB_DPRINTF("MUSB_NewController: wType 1 = %d\r\n", wType);
+    if (!wType)
     {
         wType = MGC_DiscoverController(pControllerAddressBsr);
     }
+    MUSB_DPRINTF("MUSB_NewController: wType 2 = %d\r\n", wType);
 
     /* initialize data & dispatch table */
-    switch(wType)
+    switch (wType)
     {
 #ifdef MUSB_FDRC
     case MUSB_CONTROLLER_FDRC:
@@ -452,28 +456,28 @@ MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
 #endif	/* HDRC */
     }	/* switch on controller type */
 
-    if(bOK)
+    if (bOK)
     {
 
 #if MUSB_DIAG > 0
         MUSB_DIAG_STRING(2, "Configuration:");
-        if(pWrapper->PortImpl.bHasBulkCombine)
+        if (pWrapper->PortImpl.bHasBulkCombine)
         {
             MUSB_DIAG_STRING(2, "  Bulk packeting combining");
         }
-        if(pWrapper->PortImpl.bHasBulkSplit)
+        if (pWrapper->PortImpl.bHasBulkSplit)
         {
             MUSB_DIAG_STRING(2, "  Bulk packeting splitting");
         }
-        if(pWrapper->PortImpl.bHasHbIsoRx)
+        if (pWrapper->PortImpl.bHasHbIsoRx)
         {
             MUSB_DIAG_STRING(2, "  High-bandwidth isochronous Rx");
         }
-        if(pWrapper->PortImpl.bHasHbIsoTx)
+        if (pWrapper->PortImpl.bHasHbIsoTx)
         {
             MUSB_DIAG_STRING(2, "  High-bandwidth isochronous Tx");
         }
-        for(bEnd = 1; bEnd < pWrapper->PortImpl.bEndCount; bEnd++)
+        for (bEnd = 1; bEnd < pWrapper->PortImpl.bEndCount; bEnd++)
         {
             pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pWrapper->PortImpl.LocalEnds), bEnd);
             MUSB_DIAG2(2, "  Endpoint=", bEnd, " / Shared FIFO=", pEnd->bIsFifoShared, 10, 0);
@@ -483,7 +487,7 @@ MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
 #endif
 
         /* initialize IRP lists */
-        for(bEnd = 0; bEnd < pWrapper.PortImpl.bEndCount; bEnd++)
+        for (bEnd = 0; bEnd < pWrapper.PortImpl.bEndCount; bEnd++)
         {
             pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pWrapper.PortImpl.LocalEnds), bEnd);
             MUSB_ListInit(&(pEnd->TxIrpList));
@@ -494,12 +498,15 @@ MUSB_Controller *MUSB_NewController(MUSB_SystemUtils *pUtils,
         pOverheads = MUSB_MemAlloc(pWrapper->PortImpl.bEndCount * sizeof(MGC_OverheadStats));
         MUSB_ArrayInit(&(pWrapper->PortImpl.OverheadStats), sizeof(MGC_OverheadStats),
                        pWrapper->PortImpl.bEndCount, pOverheads);
-        for(bEnd = 0; bEnd < pWrapper->PortImpl.bEndCount; bEnd++)
+    MUSB_DPRINTF("MUSB_NewController: pWrapper->PortImpl.bEndCount = %d\r\n", pWrapper->PortImpl.bEndCount);
+        for (bEnd = 0; bEnd < pWrapper->PortImpl.bEndCount; bEnd++)
         {
             Stats.dwOverheadMax = 0L;
             Stats.dwOverheadMin = 0xffffffffL;
+        MUSB_DPRINTF("MUSB_NewController: bEnd = %d\r\n", bEnd);
             MUSB_ArrayAppend(&(pWrapper->PortImpl.OverheadStats), &Stats);
         }
+    MUSB_DPRINTF("MUSB_NewController: MUSB_ArrayAppend End\r\n");
 #endif
         /* ready */
         pResult = &(pWrapper.Controller);
@@ -517,11 +524,12 @@ uint32_t MUSB_SetControllerHostPower(MUSB_Controller *pController,
     uint32_t result = MUSB_STATUS_INVALID_ARGUMENT;
     MGC_Controller *pImpl = NULL;
 
-    if(pController)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pController)
     {
         pImpl = (MGC_Controller *)pController->pPrivateData;
     }
-    if(pImpl)
+    if (pImpl)
     {
         if (pImpl->pfSetControllerHostPower)
         {
@@ -540,15 +548,16 @@ uint32_t MUSB_StartController(MUSB_Controller *pController,
 {
     MGC_Controller *pImpl = NULL;
 
-    if(pController)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pController)
     {
         pImpl = (MGC_Controller *)pController->pPrivateData;
     }
-    if(pImpl)
+    if (pImpl)
     {
 #ifdef MUSB_DMA
         /* try to instantiate DMA controller */
-        if(pImpl->pDmaControllerFactory)
+        if (pImpl->pDmaControllerFactory)
         {
             pImpl->pPort->pDmaController = pImpl->pDmaControllerFactory->pfNewDmaController(
                                                pImpl->pPort->pfDmaChannelStatusChanged, pImpl->pPort,
@@ -556,7 +565,7 @@ uint32_t MUSB_StartController(MUSB_Controller *pController,
                                                pImpl->pControllerAddressIsr, pImpl->pControllerAddressIst);
         }
         /* if successful, start it */
-        if(pImpl->pPort->pDmaController)
+        if (pImpl->pPort->pDmaController)
         {
             pImpl->pPort->pDmaController->pfDmaStartController(
                 pImpl->pPort->pDmaController->pPrivateData);
@@ -571,6 +580,7 @@ uint32_t MUSB_StartController(MUSB_Controller *pController,
 /* Discover the number of ports */
 uint16_t MUSB_CountPorts()
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     return MGC_iController;
 }
 
@@ -580,11 +590,12 @@ MUSB_Port *MUSB_GetPort(uint16_t index)
     MUSB_Port *pResult = NULL;
     MGC_ControllerWrapper *pWrapper;
 
-    if(index < MGC_iController)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (index < MGC_iController)
     {
         /* typically called at init time only, so linear search OK */
         pWrapper = (MGC_ControllerWrapper *)MUSB_ListFindItem(&MGC_ControllerList, index);
-        if(pWrapper)
+        if (pWrapper)
         {
             pResult = &(pWrapper->Port);
         }
@@ -599,6 +610,7 @@ uint8_t MUSB_DeactivateClient(MUSB_BusHandle hBus)
 {
     MGC_Port *pPort = (MGC_Port *)hBus;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* clear for next session */
     pPort->bSessionActive = FALSE;
 
@@ -616,6 +628,7 @@ uint32_t MUSB_GetBusFrame(MUSB_BusHandle hBus)
 {
     MGC_Port *pPort = (MGC_Port *)hBus;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->pfReadBusState(pPort);
     return pPort->dwFrame;
 }
@@ -625,14 +638,18 @@ uint32_t MUSB_GetBusFrame(MUSB_BusHandle hBus)
  */
 void MUSB_SuspendBus(MUSB_BusHandle hBus)
 {
+    MGC_Port* pPort = (MGC_Port*)hBus;
+
+#if defined(MUSB_HOST) || defined(MUSB_OTG)
     uint16_t wCount;
     uint16_t wIndex;
-    MUSB_Device *pDevice;
-    MGC_Device *pImplDevice;
-    MUSB_DeviceDriver *pDriver;
-    MGC_Port *pPort = (MGC_Port *)hBus;
+    MUSB_Device* pDevice;
+    MGC_Device* pImplDevice;
+    MUSB_DeviceDriver* pDriver;
+#endif
 
-    if(pPort)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort)
     {
         /* try */
 #ifdef MUSB_OTG
@@ -643,16 +660,16 @@ void MUSB_SuspendBus(MUSB_BusHandle hBus)
 #if defined(MUSB_HOST) || defined(MUSB_OTG)
         /* inform drivers */
         wCount = MUSB_ListLength(&(pPort->ConnectedDeviceList));
-        for(wIndex = 0; wIndex < wCount; wIndex++)
+        for (wIndex = 0; wIndex < wCount; wIndex++)
         {
             pDevice = (MUSB_Device *)MUSB_ListFindItem(&(pPort->ConnectedDeviceList), wIndex);
-            if(pDevice)
+            if (pDevice)
             {
                 pImplDevice = pDevice->pPrivateData;
-                if(pImplDevice)
+                if (pImplDevice)
                 {
                     pDriver = pImplDevice->pDriver;
-                    if(pDriver->pfBusSuspended)
+                    if (pDriver->pfBusSuspended)
                     {
                         pDriver->pfBusSuspended(pDriver->pPrivateData, hBus);
                     }
@@ -670,9 +687,10 @@ void MUSB_ResumeBus(MUSB_BusHandle hBus)
 {
     MGC_Port *pPort = (MGC_Port *)hBus;
 
-    if(pPort)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort)
     {
-        if(pPort->bIsHost || pPort->bCanWakeup)
+        if (pPort->bIsHost || pPort->bCanWakeup)
         {
             /* try */
             pPort->bWantSuspend = FALSE;
@@ -680,7 +698,7 @@ void MUSB_ResumeBus(MUSB_BusHandle hBus)
             pPort->pfProgramBusState(pPort);
 
 #if defined(MUSB_HOST) || defined(MUSB_OTG)
-            switch(pPort->pController->wControllerType)
+            switch (pPort->pController->wControllerType)
             {
             case MUSB_CONTROLLER_FDRC:
             case MUSB_CONTROLLER_HDRC:
@@ -700,6 +718,7 @@ void MUSB_ResumeBus(MUSB_BusHandle hBus)
  */
 uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_DMA
     uint8_t bHadChannel = TRUE;
     uint8_t *pResult = NULL;
@@ -709,11 +728,11 @@ uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
     MUSB_DmaController *pDmaController = pPort->pDmaController;
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
 
-    if(pDmaController)
+    if (pDmaController)
     {
-        if(bIsTx)
+        if (bIsTx)
         {
-            if(!pEnd->pDmaChannel)
+            if (!pEnd->pDmaChannel)
             {
                 bHadChannel = FALSE;
                 pEnd->pDmaChannel = pDmaController->pfDmaAllocateChannel(
@@ -721,16 +740,16 @@ uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
                                         bIsTx, pPipe->bTrafficType,
                                         bIsTx ? pEnd->wMaxPacketSizeTx : pEnd->wMaxPacketSizeRx);
             }
-            if(pEnd->pDmaChannel)
+            if (pEnd->pDmaChannel)
             {
                 pResult = pDmaController->pfDmaAllocateBuffer(
                               pEnd->pDmaChannel, dwLength);
-                if(pResult)
+                if (pResult)
                 {
                     /* success: increment count */
                     pEnd->wDmaBufferCount++;
                 }
-                else if(!pResult && !bHadChannel)
+                else if (!pResult && !bHadChannel)
                 {
                     /* failure: release channel if we allocated it */
                     pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
@@ -740,7 +759,7 @@ uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
         }
         else
         {
-            if(!pEnd->pRxDmaChannel)
+            if (!pEnd->pRxDmaChannel)
             {
                 bHadChannel = FALSE;
                 pEnd->pRxDmaChannel = pDmaController->pfDmaAllocateChannel(
@@ -748,16 +767,16 @@ uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
                                           bIsTx, pPipe->bTrafficType,
                                           bIsTx ? pEnd->wMaxPacketSizeTx : pEnd->wMaxPacketSizeRx);
             }
-            if(pEnd->pRxDmaChannel)
+            if (pEnd->pRxDmaChannel)
             {
                 pResult = pDmaController->pfDmaAllocateBuffer(
                               pEnd->pRxDmaChannel, dwLength);
-                if(pResult)
+                if (pResult)
                 {
                     /* success: increment count */
                     pEnd->wRxDmaBufferCount++;
                 }
-                else if(!pResult && !bHadChannel)
+                else if (!pResult && !bHadChannel)
                 {
                     /* failure: release channel if we allocated it */
                     pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
@@ -774,6 +793,7 @@ uint8_t *MUSB_AllocDmaBuffer(MUSB_PipePtr hPipe, uint32_t dwLength)
 
 void MUSB_FreeDmaBuffer(MUSB_PipePtr hPipe, uint8_t *pBuffer)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
 #ifdef MUSB_DMA
     MGC_Pipe *pPipe = (MGC_Pipe *)hPipe;
     MGC_EndpointResource *pEnd = pPipe->pLocalEnd;
@@ -781,32 +801,32 @@ void MUSB_FreeDmaBuffer(MUSB_PipePtr hPipe, uint8_t *pBuffer)
     MUSB_DmaController *pDmaController = pPort->pDmaController;
     uint8_t bIsTx = (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT) ? TRUE : FALSE;
 
-    if(pDmaController)
+    if (pDmaController)
     {
-        if(bIsTx && pEnd->pDmaChannel)
+        if (bIsTx && pEnd->pDmaChannel)
         {
             pDmaController->pfDmaReleaseBuffer(
                 pEnd->pDmaChannel, pBuffer);
-            if(pEnd->wDmaBufferCount)
+            if (pEnd->wDmaBufferCount)
             {
                 --pEnd->wDmaBufferCount;
                 /* if buffer count goes to zero, release channel for others */
-                if(!pEnd->wDmaBufferCount)
+                if (!pEnd->wDmaBufferCount)
                 {
                     pDmaController->pfDmaReleaseChannel(pEnd->pDmaChannel);
                     pEnd->pDmaChannel = NULL;
                 }
             }
         }
-        if(!bIsTx && pEnd->pRxDmaChannel)
+        if (!bIsTx && pEnd->pRxDmaChannel)
         {
             pDmaController->pfDmaReleaseBuffer(
                 pEnd->pRxDmaChannel, pBuffer);
-            if(pEnd->wDmaBufferCount)
+            if (pEnd->wDmaBufferCount)
             {
                 --pEnd->wDmaBufferCount;
                 /* if buffer count goes to zero, release channel for others */
-                if(!pEnd->wDmaBufferCount)
+                if (!pEnd->wDmaBufferCount)
                 {
                     pDmaController->pfDmaReleaseChannel(pEnd->pRxDmaChannel);
                     pEnd->pRxDmaChannel = NULL;
@@ -854,7 +874,8 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
     uint8_t bIsIn = (pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_DIR_MASK) ? TRUE : FALSE;
     uint8_t bIsTx = pPort->bIsHost ? !bIsIn : bIsIn;
 
-    if(pPort->bIsHost)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort->bIsHost)
     {
         /* host mode: find a space, compacting if necessary */
         /* collect all buffer info for analysis, and accumulate used size and double-buffering size */
@@ -867,18 +888,18 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
         adwBase[0] = 0;
         awSize[0] = pEnd->wMaxPacketSizeTx;
         dwUsedSize = awSize[0];
-        for(bBufCount = bEnd = 1; bEnd < pPort->bEndCount; bEnd++)
+        for (bBufCount = bEnd = 1; bEnd < pPort->bEndCount; bEnd++)
         {
             pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEnd);
             pPort->pfDynamicFifoLocation(pPort, bEnd, TRUE, FALSE,
                                          &(adwBase[bBufCount]), &bVal, &(abDouble[bBufCount]));
-            if(adwBase[bBufCount])
+            if (adwBase[bBufCount])
             {
                 awSize[bBufCount] = MGC_awDynamicSize[bVal];
                 abEnd[bBufCount] = bEnd;
                 abTx[bBufCount] = TRUE;
                 dwUsedSize += pEnd->wMaxPacketSizeTx;
-                if(abDouble[bBufCount])
+                if (abDouble[bBufCount])
                 {
                     dwDoubleSize += awSize[bBufCount];
                 }
@@ -888,17 +909,17 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
                            awSize[bBufCount], 16, 8);
                 bBufCount++;
             }
-            if(!pEnd->bIsFifoShared)
+            if (!pEnd->bIsFifoShared)
             {
                 pPort->pfDynamicFifoLocation(pPort, bEnd, FALSE, FALSE,
                                              &(adwBase[bBufCount]), &bVal, &(abDouble[bBufCount]));
-                if(adwBase[bBufCount])
+                if (adwBase[bBufCount])
                 {
                     awSize[bBufCount] = MGC_awDynamicSize[bVal];
                     abEnd[bBufCount] = bEnd;
                     abTx[bBufCount] = FALSE;
                     dwUsedSize += pEnd->wMaxPacketSizeRx;
-                    if(abDouble[bBufCount])
+                    if (abDouble[bBufCount])
                     {
                         dwDoubleSize += awSize[bBufCount];
                     }
@@ -912,42 +933,42 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
         }
 
         /* fail now if current used size + what could be stolen is insufficient */
-        if((dwTotalSize - dwUsedSize + dwDoubleSize) < wPacketSize)
+        if ((dwTotalSize - dwUsedSize + dwDoubleSize) < wPacketSize)
         {
             return NULL;
         }
 
         /* steal all double buffers if current used size is insufficient */
-        if((dwTotalSize - dwUsedSize) < wPacketSize)
+        if ((dwTotalSize - dwUsedSize) < wPacketSize)
         {
             bStealDoubles = TRUE;
         }
 
         /* compact now, because the work is required in any case */
-        for(bBufCandidate = 0; bBufCandidate < bBufCount; bBufCandidate++)
+        for (bBufCandidate = 0; bBufCandidate < bBufCount; bBufCandidate++)
         {
             dwBaseCandidate = adwBase[bBufCandidate] + awSize[bBufCandidate];
-            if(abDouble[bBufCandidate])
+            if (abDouble[bBufCandidate])
             {
                 dwBaseCandidate += awSize[bBufCandidate];
             }
             dwNearest = dwTotalSize;
-            for(bBuf = bBufCandidate + 1; bBuf < bBufCount; bBuf++)
+            for (bBuf = bBufCandidate + 1; bBuf < bBufCount; bBuf++)
             {
                 dwDistance = adwBase[bBuf] - dwBaseCandidate;
-                if(0 == dwDistance)
+                if (0 == dwDistance)
                 {
                     /* compaction candidate is already where it should be */
                     dwNearest = dwTotalSize;
                     break;
                 }
-                if((dwDistance > 0) && (dwDistance < (int32_t)dwNearest))
+                if ((dwDistance > 0) && (dwDistance < (int32_t)dwNearest))
                 {
                     dwNearest = dwDistance;
                     bNearestBuf = bBuf;
                 }
             }
-            if(dwNearest < dwTotalSize)
+            if (dwNearest < dwTotalSize)
             {
                 /* move it down */
                 bEnd = abEnd[bNearestBuf];
@@ -955,12 +976,12 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
                 /* stop traffic */
                 MUSB_DIAG2(2, "Compacting FIFOs: stopping traffic on end=",
                            bEnd, " / Tx=", abTx[bNearestBuf], 10, 0);
-                if(abTx[bNearestBuf])
+                if (abTx[bNearestBuf])
                 {
                     pPort->pfProgramHaltEndpoint(pPort, pEnd, 0, TRUE);
                     /* no choice but to poll */
                     bTxHalted = FALSE;
-                    while(!bTxHalted)
+                    while (!bTxHalted)
                     {
                         bTxHalted = *(volatile uint8_t *) & (pEnd->bIsHalted);
                     }
@@ -972,7 +993,7 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
                 /* set new location */
                 pPort->pfDynamicFifoLocation(pPort, bEnd, abTx[bNearestBuf],
                                              FALSE, &dwBase, &bVal, &bDouble);
-                if(bStealDoubles)
+                if (bStealDoubles)
                 {
                     bDouble = FALSE;
                 }
@@ -992,25 +1013,25 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
 
         /* now find the top and go for it */
         dwBaseCandidate = 0;
-        for(bBuf = 0; bBuf < bBufCount; bBuf++)
+        for (bBuf = 0; bBuf < bBufCount; bBuf++)
         {
             dwBase = adwBase[bBuf] + awSize[bBuf];
-            if(abDouble[bBuf])
+            if (abDouble[bBuf])
             {
                 dwBase += awSize[bBuf];
             }
-            if(dwBase > dwBaseCandidate)
+            if (dwBase > dwBaseCandidate)
             {
                 dwBaseCandidate = dwBase;
             }
         }
 
-        for(bEnd = 0; bEnd < pPort->bEndCount; bEnd++)
+        for (bEnd = 0; bEnd < pPort->bEndCount; bEnd++)
         {
             pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEnd);
             bIsClaimed = pEnd->bIsFifoShared ?
                          pEnd->bIsClaimed : (bIsTx ? pEnd->bIsClaimed : pEnd->bRxClaimed);
-            if(!bIsClaimed)
+            if (!bIsClaimed)
             {
                 dwBase = dwUsedSize;
                 break;
@@ -1020,7 +1041,7 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
     else
     {
         /* device mode; accumulate used size (NOTE: assumes endpoint descriptors are in order) */
-        for(dwUsedSize = bEnd = 0; bEnd < pPort->bEndCount; bEnd++)
+        for (dwUsedSize = bEnd = 0; bEnd < pPort->bEndCount; bEnd++)
         {
             pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEnd);
             bIsClaimed = pEnd->bIsFifoShared ?
@@ -1031,12 +1052,12 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
         /* use endpoint from descriptor */
         bEnd = pUsbEnd->UsbDescriptor.bEndpointAddress & MUSB_ENDPOINT_NUMBER_MASK;
         pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEnd);
-        if(!bBind)
+        if (!bBind)
         {
             /* no bind; just check */
             dwAvailSize = dwTotalSize - dwUsedSize;
             wPacketSize = MUSB_SWAP16P((uint8_t *) & (pUsbEnd->UsbDescriptor.wMaxPacketSize));
-            if(dwAvailSize >= wPacketSize)
+            if (dwAvailSize >= wPacketSize)
             {
                 return pEnd;
             }
@@ -1046,17 +1067,17 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
     }
 
     /* if we found an endpoint, allocate space and program */
-    if(bEnd < bEndCount)
+    if (bEnd < bEndCount)
     {
         dwAvailSize = dwTotalSize - dwUsedSize;
         wSize = wPacketSize;
         bVal = 0;
-        while(wSize > 1)
+        while (wSize > 1)
         {
             bVal++;
             wSize >>= 1;
         }
-        if(bVal >= 3)
+        if (bVal >= 3)
         {
             bVal -= 3;
         }
@@ -1065,14 +1086,14 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
             bVal = 0;
         }
         wSize = MGC_awDynamicSize[bVal];
-        switch(bTrafficType)
+        switch (bTrafficType)
         {
         case MUSB_ENDPOINT_XFER_BULK:
-        case MUSB_ENDPOINT_XFER_ISOC:
+	    case MUSB_ENDPOINT_XFER_ISOCH:
             /* if we are below high-water mark, try double-buffered for bulk/isoch */
 #ifndef MUSB_DISABLE_DB_DYNFIFO
             /* NOTE: does not work with MHDRC 1.1; works fine with 1.3 */
-            if(dwUsedSize < dwHighWater)
+            if (dwUsedSize < dwHighWater)
             {
                 bDouble = 1;
                 wSize <<= 1;
@@ -1080,14 +1101,14 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
 #endif
             break;
         }
-        if(bDouble && ((wSize > dwAvailSize) ||
+        if (bDouble && ((wSize > dwAvailSize) ||
                        ((dwAvailSize - wSize) < ((bEndCount - bEnd) * 8))))
         {
             /* back off double-buffering */
             bDouble = 0;
             wSize >>= 1;
         }
-        if((wSize < dwAvailSize) &&
+        if ((wSize < dwAvailSize) &&
                 ((dwAvailSize - wSize) >= ((bEndCount - bEnd) * 8)))
         {
             /* we're good to go */
@@ -1096,9 +1117,10 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
             MUSB_DIAG2(2, "\tBase=", dwBase, " / Effective Size=", wSize, 16, 8);
             pPort->pfDynamicFifoLocation(pPort, bEnd, bIsTx, TRUE,
                                          &dwBase, &bVal, &bDouble);
-            if(bIsTx || pEnd->bIsFifoShared)
+            if (bIsTx || pEnd->bIsFifoShared)
             {
                 pEnd->bIsClaimed = TRUE;
+	            MUSB_DPRINTF("MGC_AllocateDynamicFifo: pEnd->bIsClaimed = 0x%x\r\n", pEnd->bIsClaimed);
             }
             else
             {
@@ -1106,7 +1128,7 @@ MGC_EndpointResource *MGC_AllocateDynamicFifo(MGC_Port *pPort,
             }
             pEnd->bIsTx = bIsTx;
             pEnd->bIsHalted = FALSE;
-            if(bIsTx)
+            if (bIsTx)
             {
                 pEnd->bBusAddress = pUsbEnd->pDevice->bBusAddress;
                 pEnd->bBusEnd = pUsbEnd->UsbDescriptor.bEndpointAddress;

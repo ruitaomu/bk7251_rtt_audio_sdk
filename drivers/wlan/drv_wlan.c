@@ -746,7 +746,7 @@ static int _wifi_power_manager(int level)
         #endif
         #if CFG_USE_STA_PS
         /* disable rf sleep */
-        bk_wlan_dtim_rf_ps_disable_send_msg();
+        bk_wlan_dtim_rf_ps_mode_disable();
         /* pause rf timer */
         bk_wlan_dtim_rf_ps_timer_pause();
         #endif
@@ -761,7 +761,7 @@ static int _wifi_power_manager(int level)
         #endif
         #if CFG_USE_STA_PS
         /* disable rf sleep */
-        bk_wlan_dtim_rf_ps_disable_send_msg();
+        bk_wlan_dtim_rf_ps_mode_disable();
         /* pause rf timer */
         bk_wlan_dtim_rf_ps_timer_pause();
         #endif
@@ -772,13 +772,13 @@ static int _wifi_power_manager(int level)
     {
         #if CFG_USE_MCU_PS
         /* disable cpu sleep */
-        bk_wlan_mcu_ps_mode_disable();
+        bk_wlan_mcu_ps_mode_enable();
         #endif
         #if CFG_USE_STA_PS
         /* enable rf sleep */
         bk_wlan_dtim_rf_ps_mode_enable();
         /* start rf timer */
-        bk_wlan_dtim_rf_ps_timer_start();
+        bk_wlan_dtim_rf_ps_timer_pause();
         #endif
         break;
     }
@@ -798,7 +798,23 @@ static int _wifi_power_manager(int level)
         break;
     }
 
-
+    case 4:
+    {
+        /***************************
+        if user not use audio_adc and audio_dac,
+        close it to reduce CFG_USE_STA_PS about 10ma.
+        audio_adc_close_analog_regs();
+        audio_dac_close_analog_regs();
+        ***************************/
+        
+        /* disable cpu sleep */
+        bk_wlan_mcu_ps_mode_disable();
+        /* enable rf sleep */
+        bk_wlan_dtim_rf_ps_mode_enable();
+        /* start rf timer */
+        bk_wlan_dtim_rf_ps_timer_start();
+        break;
+    }
     default:
         break;
  }

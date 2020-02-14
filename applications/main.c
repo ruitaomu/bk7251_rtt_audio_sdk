@@ -37,7 +37,7 @@
 #include "ate_app.h"
 #include "shell.h"
 #include <fal.h>
-#include "rt_ota.h"
+//#include "rt_ota.h"
 
 static int wlan_app_init(void);
 
@@ -95,6 +95,10 @@ int main(int argc, char **argv)
 
     wlan_app_init();
 #if defined(PKG_USING_PLAYER)
+    player_codec_helixmp3_register(); 
+    player_codec_beken_aac_register(); 
+    player_codec_beken_m4a_register(); 
+    player_codec_opencore_amr_register(); 
 	player_system_init();
 #endif
 

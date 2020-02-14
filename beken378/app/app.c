@@ -113,7 +113,6 @@ int bmsg_ps_handler_rf_ps_mode_real_wakeup(void)
 {
 #if CFG_USE_STA_PS
     power_save_rf_dtim_manual_do_wakeup();
-    power_save_rf_ps_wkup_semlist_set();
 #endif
     return 0;
 }
@@ -255,6 +254,8 @@ void bmsg_skt_tx_sender(void *arg)
         os_printf("bmsg_rx_sender_failed\r\n");
     }
 }
+extern void power_save_wait_timer_real_handler(void *data);
+extern void power_save_wait_timer_start(void);
 
 void ps_msg_process(UINT8 ps_msg)
 {
@@ -302,6 +303,20 @@ void ps_msg_process(UINT8 ps_msg)
         case PS_BMSG_IOCTL_RF_KP_STOP:
             power_save_keep_timer_stop();
             break;
+        case PS_BMSG_IOCTL_WAIT_TM_HANDLER:
+            power_save_wait_timer_real_handler(NULL);
+            break;
+        case PS_BMSG_IOCTL_WAIT_TM_SET:
+            power_save_wait_timer_start();
+            break;
+        case PS_BMSG_IOCTL_RF_PS_TIMER_INIT:
+            power_save_set_linger_time(20);
+            power_save_set_keep_timer_time(20);
+            break; 
+        case PS_BMSG_IOCTL_RF_PS_TIMER_DEINIT:
+            power_save_set_linger_time(0);
+            power_save_set_keep_timer_time(0);
+            break; 
 #endif
 
         default:
@@ -483,7 +498,8 @@ void bmsg_ps_sender(uint8_t arg)
 {
     OSStatus ret;
     BUS_MSG_T msg;
-
+    if(g_wifi_core.io_queue)
+    {
     msg.type = BMSG_STA_PS_TYPE;
     msg.arg = (uint32_t)arg;
     msg.len = 0;
@@ -493,8 +509,12 @@ void bmsg_ps_sender(uint8_t arg)
     if(kNoErr != ret)
     {
         os_printf("bmsg_ps_sender failed\r\n");
+        }
     }
-
+    else
+    {
+        os_printf("g_wifi_core.io_queue null\r\n");
+    }
 }
 #if CFG_USE_STA_PS
 

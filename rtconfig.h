@@ -42,7 +42,7 @@
 #define RT_USING_DEVICE_OPS
 #define RT_USING_CONSOLE
 #define RT_CONSOLEBUF_SIZE 128
-#define RT_CONSOLE_DEVICE_NAME "uart2"
+#define RT_CONSOLE_DEVICE_NAME "uart1"
 
 /* RT-Thread Components */
 
@@ -144,7 +144,7 @@
 #define RT_LWIP_TCP
 #define RT_LWIP_RAW
 #define RT_MEMP_NUM_NETCONN 12
-#define RT_LWIP_PBUF_NUM 3
+#define RT_LWIP_PBUF_NUM 14
 #define RT_LWIP_RAW_PCB_NUM 2
 #define RT_LWIP_UDP_PCB_NUM 6
 #define RT_LWIP_TCP_PCB_NUM 8
@@ -190,9 +190,7 @@
 #define MQTT_DEBUG
 #define PKG_USING_PAHOMQTT_LATEST
 #define PKG_USING_WEBCLIENT
-#define WEBCLIENT_HEADER_BUFSZ 4096
-#define WEBCLIENT_RESPONSE_BUFSZ 4096
-#define PKG_USING_WEBCLIENT_LATEST_VERSION
+#define PKG_USING_WEBCLIENT_V100
 #define PKG_USING_CJSON
 #define PKG_USING_CJSON_V102
 
@@ -209,6 +207,8 @@
 #define PKG_NETUTILS_NTP
 #define NETUTILS_NTP_TIMEZONE 8
 #define NETUTILS_NTP_HOSTNAME "cn.ntp.org.cn"
+#define NETUTILS_NTP_HOSTNAME2 "ntp.rt-thread.org"
+#define NETUTILS_NTP_HOSTNAME3 "edu.ntp.org.cn"
 #define PKG_USING_NETUTILS_LATEST_VERSION
 
 /* IoT Cloud */
@@ -231,20 +231,22 @@
 #define PKG_USING_FAL
 #define FAL_DEBUG_CONFIG
 #define FAL_DEBUG 1
-#define PKG_USING_FAL_LATEST_VERSION
-#define FAL_PART_TABLE_END_OFFSET (60 * 1024UL) //speed up if need change to 64k
 #define FAL_PART_TABLE_FLASH_DEV_NAME "beken_onchip_crc"
+#define FAL_PART_TABLE_END_OFFSET 61440
+#define PKG_USING_FAL_LATEST_VERSION
+#define PKG_FAL_VER_NUM 0x99999
 
 /* peripheral libraries and drivers */
 
 
 /* miscellaneous packages */
 
+#define PKG_USING_OPTPARSE
+#define PKG_USING_OPTPARSE_V100
 #define PKG_USING_MULTIBUTTON
 #define PKG_USING_MULTIBUTTON_V102
 #define PKG_USING_ZLIB
-
-/* MultiButton Options */
+#define PKG_USING_ZLIB_V100
 
 
 /* sample package */
@@ -270,6 +272,10 @@
 
 /* Player Config */
 #define PKG_USING_PLAYER
+#define PLAYER_USING_EXAMPLE00
+#define PLAYER_USING_EXAMPLE02
+#define PLAYER_USING_EXAMPLE03
+
 /* Hardware Drivers Config */
 #define BEKEN_USING_UART1
 #define BEKEN_USING_UART2
@@ -284,6 +290,8 @@
 //#define BEKEN_USING_SPI_FLASH
 //#define BEKEN_USING_SPI_PSRAM
 //#define BEKEN_USING_SPI_HSLAVE
+
+//#define RT_USING_BLE
 
 /* Application Samples Config */
 

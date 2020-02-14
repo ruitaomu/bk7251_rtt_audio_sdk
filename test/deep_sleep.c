@@ -22,20 +22,20 @@ static void enter_deep_sleep_test(int argc,char *argv[])
 
 	deep_sleep_param.wake_up_way			= 0;
 	
-	deep_sleep_param.gpio_index_map      	= atoi(argv[1]);
-	deep_sleep_param.gpio_edge_map       	= atoi(argv[2]);	
-	deep_sleep_param.gpio_last_index_map 	= atoi(argv[3]);
-	deep_sleep_param.gpio_last_edge_map  	= atoi(argv[4]);
+	deep_sleep_param.gpio_index_lo_map      	= atoi(argv[1]);
+	deep_sleep_param.gpio_edge_lo_map       	= atoi(argv[2]);	
+	deep_sleep_param.gpio_index_hi_map 	= atoi(argv[3]);
+	deep_sleep_param.gpio_edge_hi_map  	= atoi(argv[4]);
 	deep_sleep_param.sleep_time     		= atoi(argv[5]);
 	deep_sleep_param.wake_up_way     		= atoi(argv[6]);
 
 	if(argc == 7)
 	{		
 		rt_kprintf("---deep sleep test param : 0x%0X 0x%0X 0x%0X 0x%0X %d %d\r\n", 
-					deep_sleep_param.gpio_index_map, 
-					deep_sleep_param.gpio_edge_map,
-					deep_sleep_param.gpio_last_index_map, 
-					deep_sleep_param.gpio_last_edge_map,
+					deep_sleep_param.gpio_index_lo_map, 
+					deep_sleep_param.gpio_edge_lo_map,
+					deep_sleep_param.gpio_index_hi_map, 
+					deep_sleep_param.gpio_edge_hi_map,
 					deep_sleep_param.sleep_time,
 					deep_sleep_param.wake_up_way);
 		

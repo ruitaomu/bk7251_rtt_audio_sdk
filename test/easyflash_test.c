@@ -16,54 +16,118 @@
 #include "test_config.h"
 
 
-unsigned char read_buff[10*1024];
-unsigned char write_buff[10*1024];
-
-#define  test_data "AABBCCDDEEFFGGHHIIJJKKLLMMNNOOPPQQRRSSTTUUVVWWXXYYZZ"     
-#define  KEY "temp"
-
-static void Easy_Flash_Write(void)
+static void easy_flash_set(char *key, char *value)
 {
 	EfErrCode result = EF_NO_ERR;
 	
 	easyflash_init();					 			/*初始化 */		
 	
-    result = ef_set_env(KEY,test_data);				/*将要写入的数据存放到 easy flash  环境变量 */
+    result = ef_set_env(key, value);				/*将要写入的数据存放到 easy flash  环境变量 */
 	if(result != EF_NO_ERR)
 	{
-		rt_kprintf("easy_flash set error");
+		rt_kprintf("easy_flash set error\r\n");
 		return;
 	}
 	
     result = ef_save_env();							/*保存数据 */
 	if(result != EF_NO_ERR)
 	{
-		rt_kprintf("easy_flash save error");
+		rt_kprintf("easy_flash save error\r\n");
 		return;
 	}
 	
     rt_kprintf("---Flash Write over \r\n");	
 }
 
-static void Easy_Flash_Read(void)  /*读取easy flash 写入的数据*/
+static void easy_flash_get(char *key, char *value)  /*读取easy flash 写入的数据*/
 {
-    char *p_write_buff;
-	
 	easyflash_init();
 	
-	p_write_buff = ef_get_env(KEY);			/*获取easy flash存入的数据*/	
-	if( p_write_buff )
+	value = ef_get_env(key);			/*获取easy flash存入的数据*/	
+	if( value )
 	{
-		rt_kprintf("%s",p_write_buff);
+		rt_kprintf("%s\r\n",value);
 	}
 	else
 	{
 		rt_kprintf("easy_flash get error\r\n");	
 	}
+	return ;
 }
 
+static void easy_flash_erase(char *key)  /*读取easy flash 写入的数据*/
+{
+	EfErrCode result = EF_NO_ERR;
+	char value = 0;
 	
-MSH_CMD_EXPORT(Easy_Flash_Write,set_or_read_Easy_Flash_Write test);
-MSH_CMD_EXPORT(Easy_Flash_Read, set_or_read_Easy_Flash_Read       test);
+	easyflash_init();					 			/*初始化 */		
+	
+    result = ef_set_env(key, &value);				/*将要写入的数据存放到 easy flash  环境变量 */
+	if(result != EF_NO_ERR)
+	{
+		rt_kprintf("easy_flash erase error\r\n");
+	}else
+	{
+		rt_kprintf("easy_flash erase success\r\n");
+	}
+	return;
+}
+
+static int easy_flash(uint8_t argc, char **argv) 
+{
+	char *key = NULL;
+	char *value = NULL;
+
+    if (strcmp(argv[1], "set") == 0)
+    {
+		os_printf("easyflash set command\r\n");
+		if (argc == 4)
+		{
+			key = argv[2];
+			value = argv[3];
+		}
+		else
+		{
+			os_printf("parameter invalid\r\n");
+			return -1;
+		}
+
+		easy_flash_set(key, value);
+
+		return 0;
+    }else if (strcmp(argv[1], "get") == 0)
+	{
+		os_printf("easyflash get command\r\n");
+		if (argc == 3)
+		{
+			key = argv[2];
+			easy_flash_get(key, value);
+		}
+		else
+		{
+			os_printf("parameter invalid\r\n");
+			return -1;
+		}
+
+		return 0;
+	}else if (strcmp(argv[1], "erase") == 0)
+	{
+		os_printf("easyflash erase command\r\n");
+		if (argc == 3)
+		{
+			key = argv[2];
+			easy_flash_erase(key);
+		}
+		else
+		{
+			os_printf("parameter invalid\r\n");
+			return -1;
+		}
+
+		return 0;
+	}
+}
+
+MSH_CMD_EXPORT(easy_flash, easy_flash_command: easy_flash <set/get/erase> <key> [value]);
 
 #endif

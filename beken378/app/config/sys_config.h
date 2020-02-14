@@ -14,6 +14,7 @@
 
 /*section 1-----OS macro config-----*/
 #define CFG_OS_FREERTOS                            1
+#define CFG_SUPPORT_RTT                            1
 
 #if CFG_OS_FREERTOS
 #define THD_APPLICATION_PRIORITY                   3
@@ -49,9 +50,15 @@
 #define CFG_MSDU_RESV_HEAD_LEN                    96
 #define CFG_MSDU_RESV_TAIL_LEN                    16
 
-#define CFG_USE_USB_HOST                           0
-
 #define CFG_USB                                    0
+#define CFG_USE_USB_HOST                           0
+#define CFG_USE_USB_DEVICE                         1
+#if (!(CFG_USE_USB_HOST || CFG_USE_USB_DEVICE))
+#undef CFG_USB
+#endif
+#if CFG_USE_USB_DEVICE
+#define CFG_USE_USB_DEVICE_CARD_READER              1
+#endif
 #if CFG_USB
 #define CFG_SUPPORT_MSD                            1
 #define CFG_SUPPORT_HID                            0
@@ -122,6 +129,7 @@
 /*section 16-----support mcu & deep sleep*/
 #define CFG_USE_MCU_PS                             1
 #define CFG_USE_DEEP_PS                            1
+#define CFG_USE_BLE_PS                             0
 
 /*section 17-----support sta power sleep*/
 #define CFG_USE_STA_PS                             1
@@ -131,6 +139,10 @@
 
 /*section 19-----for SDCARD HOST*/
 #define CFG_USE_SDCARD_HOST                        1
+//select SD or SD1
+#define SD_HOST_INTF            					0
+#define SD1_HOST_INTF								1
+#define CFG_SD_HOST_INTF							SD1_HOST_INTF
 
 /*section 20 ----- support mp3 decoder*/
 #define CONFIG_APP_MP3PLAYER 			           0
@@ -159,5 +171,9 @@
 #define CFG_USE_SPI_MST_PSRAM                      0
 #define CFG_USE_SPI_SLAVE                          0
 
+#define CFG_RF_USER_BLE                            1
+#define CFG_RF_USER_WIFI                           2
+
+#define CFG_DEFAULT_RF_USER                        CFG_RF_USER_WIFI
 
 #endif // _SYS_CONFIG_H_

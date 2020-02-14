@@ -1,3 +1,5 @@
+#ifdef RECORD_AMR_TCP_TEST
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,8 +18,6 @@
 #include <interf_enc.h>
 #include "amrnb_encoder.h"
 #include "test_config.h"
-
-#ifdef RECORD_AMR_TCP_TEST
 
 #define RECORD_SAVE_BUF_SIZE (60 * 20 * 5)
 

@@ -21,7 +21,11 @@ extern void bk_printf(const char *fmt, ...);
 #define	MUSB_MAX_TRANSITION_TM	            250	/* 250 msec for transition coalesce */
 #define MUSB_TB_SRP_FAIL	                5
 #define MUSB_FORCE_FULLSPEED
-#define MUSB_ISO
+
+#define MUSB_OTG
+
+#define MUSB_ISOCH
+
 #define	MUSB_FDRC
 #define	MUSB_FDRC_AHB                       1
 

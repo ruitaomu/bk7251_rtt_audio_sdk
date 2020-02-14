@@ -30,6 +30,9 @@
 #define I2C_RTT_TEST
 
 /**/
+#define I2C_TEST
+
+/**/
 #define I2S_RTT_TEST
 
 /**/
@@ -64,4 +67,8 @@
 
 /**/
 #define WAV_PLAY_TEST
+
+#define PLAY_LIST_TEST
+
+#define CHECK_SD_PLAY_TEST
 #endif

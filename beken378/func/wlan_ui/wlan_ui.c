@@ -30,6 +30,7 @@
 #include "manual_ps_pub.h"
 #include "gpio_pub.h"
 #include "bk_rtos_pub.h"
+#include "sys_ctrl_pub.h"
 
 
 
@@ -39,6 +40,8 @@
 #endif
 
 monitor_data_cb_t g_monitor_cb = 0;
+static monitor_data_cb_t g_bcn_cb = 0;
+
 #if CFG_SUPPORT_BLE
 ble_data_cb_t g_ble_cb = 0;
 #endif
@@ -59,6 +62,10 @@ extern void net_wlan_add_netif(void *mac);
 extern void wpa_hostapd_release_scan_rst(void);
 extern int mm_bcn_get_tx_cfm(void);
 extern void user_connected_callback(FUNCPTR fn);
+extern void wlan_ui_bcn_callback(uint8_t *data, int len, hal_wifi_link_info_t *info);
+extern void power_save_bcn_callback(uint8_t *data, int len, hal_wifi_link_info_t *info);
+extern void bk_wlan_register_bcn_cb(monitor_data_cb_t fn);
+extern void mcu_ps_bcn_callback(uint8_t *data, int len, hal_wifi_link_info_t *info);
 
 static void rwnx_remove_added_interface(void)
 {
@@ -500,6 +507,9 @@ void bk_wlan_sta_init(network_InitTypeDef_st *inNetworkInitPara)
 
     bk_wlan_reg_csa_cb_coexist_mode();
     sa_station_init();
+    
+    bk_wlan_register_bcn_cb(wlan_ui_bcn_callback);
+
 }
 
 #if CFG_SUPPORT_ALIOS
@@ -536,7 +546,9 @@ OSStatus bk_wlan_start(network_InitTypeDef_st *inNetworkInitPara)
 #if CFG_ROLE_LAUNCH
     LAUNCH_REQ lreq;
 #endif
-    
+
+    bk_wlan_unconditional_rf_powerup();
+
     if(bk_wlan_is_monitor_mode()) 
     {
         os_printf("monitor (ie.airkiss) is not finish yet, stop it or waiting it finish!\r\n");
@@ -857,8 +869,10 @@ OSStatus bk_wlan_start_ap_adv(network_InitTypeDef_ap_st *inNetworkInitParaAP)
 int bk_wlan_stop(char mode)
 {
     int ret = kNoErr;
+    
+    mhdr_set_station_status(MSG_IDLE);
 #if CFG_USE_STA_PS
-    bk_wlan_dtim_rf_ps_mode_disable();
+    bk_wlan_dtim_rf_ps_disable_send_msg();
 #endif
 
     switch(mode)
@@ -1198,8 +1212,8 @@ int bk_wlan_get_channel(void)
 int bk_wlan_set_channel_sync(int channel)
 {
     rwnxl_reset_evt(0);
-    rw_msg_set_channel(channel, NULL);
-    
+    rw_msg_set_channel(channel, PHY_CHNL_BW_20, NULL);
+
     return 0;
 }
 
@@ -1221,9 +1235,9 @@ int bk_wlan_set_channel(int channel)
 	g_set_channel_postpone_num = channel;
 	GLOBAL_INT_RESTORE();
 
-    CHECK_OPERATE_RF_REG_IF_IN_SLEEP();
+    CHECK_NEED_WAKE_IF_STA_IN_SLEEP();
 	ke_evt_set(KE_EVT_RESET_BIT);
-    CHECK_OPERATE_RF_REG_IF_IN_SLEEP_END();
+    CHECK_NEED_WAKE_IF_STA_IN_SLEEP_END();
     
     return 0;
 }
@@ -1260,14 +1274,37 @@ int bk_wlan_is_monitor_mode(void)
     return (0 == g_monitor_cb) ? false : true;
 }
 
+void wlan_ui_bcn_callback(uint8_t *data, int len, hal_wifi_link_info_t *info)
+{
+#if CFG_USE_STA_PS
+    if(power_save_if_ps_rf_dtim_enabled())
+    {
+        power_save_bcn_callback(data,len,info);
+    }
+#endif
+#if CFG_USE_MCU_PS
+    mcu_ps_bcn_callback(data,len,info);
+#endif
+}
+
+void bk_wlan_register_bcn_cb(monitor_data_cb_t fn)
+{
+    	g_bcn_cb = fn;
+}
+
+monitor_data_cb_t bk_wlan_get_bcn_cb(void)
+{
+    return g_bcn_cb;
+}
+
 extern void bmsg_ps_sender(uint8_t ioctl);
 
 /** @brief  Request deep sleep,and wakeup by gpio.
  *
- *  @param  gpio_index_map:The gpio bitmap which set 1 enable wakeup deep sleep.
- *              gpio_index_map is hex and every bits is map to gpio0-gpio31.
- *          gpio_edge_map:The gpio edge bitmap for wakeup gpios,
- *              gpio_edge_map is hex and every bits is map to gpio0-gpio31.
+ *  @param  gpio_index_lo_map:The gpio bitmap which set 1 enable wakeup deep sleep.
+ *              gpio_index_lo_map is hex and every bits is map to gpio0-gpio31.
+ *          gpio_edge_lo_map:The gpio edge bitmap for wakeup gpios,
+ *              gpio_edge_lo_map is hex and every bits is map to gpio0-gpio31.
  *              0:rising,1:falling.
  */
 
@@ -1300,16 +1337,23 @@ int bk_wlan_dtim_rf_ps_mode_do_wakeup()
 
 int bk_wlan_dtim_rf_ps_disable_send_msg(void)
 {
+    GLOBAL_INT_DECLARATION();
+    PRINT_LR_REGISTER();
+    os_printf(" %d: ",__LINE__);
+
+    GLOBAL_INT_DISABLE();
     if(power_save_if_ps_rf_dtim_enabled()
             && power_save_if_rf_sleep())
 
     {
-        power_save_wkup_event_set(NEED_DISABLE_BIT | NEED_ME_DISABLE_BIT);
+        power_save_wkup_event_set(NEED_DISABLE_BIT);
     }
     else
     {
         power_save_dtim_rf_ps_disable_send_msg();
     }
+    
+    GLOBAL_INT_RESTORE();
     return 0;
 }
 
@@ -1317,39 +1361,38 @@ int bk_wlan_dtim_rf_ps_disable_send_msg(void)
  */
 int bk_wlan_dtim_rf_ps_mode_disable(void)
 {
+    PRINT_LR_REGISTER();
+    os_printf(" %d: ",__LINE__);
+
     bk_wlan_dtim_rf_ps_disable_send_msg();
-    
-	while( 1 )
-	{
-		if ( power_save_ps_mode_get() == PS_NO_PS_MODE)
-		{
-			break;
-		}
-		else
-		{
-			bk_rtos_delay_milliseconds(100);
-		}
-	}
-
     return 0;
 }
 
-int bk_wlan_dtim_rf_ps_set_linger_time(UINT32 time_ms)
+int bk_wlan_dtim_rf_ps_timer_start(void)
 {
-    power_save_set_linger_time(time_ms);
-
+    bmsg_ps_sender(PS_BMSG_IOCTL_RF_PS_TIMER_INIT);
     return 0;
 }
+
+int bk_wlan_dtim_rf_ps_timer_pause(void)
+{
+    bmsg_ps_sender(PS_BMSG_IOCTL_RF_PS_TIMER_DEINIT);
+    return 0;
+}
+
 #endif
 
 int bk_wlan_mcu_suppress_and_sleep(UINT32 sleep_ticks )
 {
 #if CFG_USE_MCU_PS
 	#if (!CFG_SUPPORT_ALIOS) //alios hasn't support low power now
+    GLOBAL_INT_DECLARATION();
+    GLOBAL_INT_DISABLE();
     TickType_t missed_ticks = 0;  
 	
     missed_ticks = mcu_power_save( sleep_ticks );    
-    vTaskStepTick( missed_ticks );
+    fclk_update_tick( missed_ticks );
+    GLOBAL_INT_RESTORE();
 	#endif
 #endif
     return 0;
@@ -1375,6 +1418,12 @@ int bk_wlan_mcu_ps_mode_disable(void)
 }
 #endif
 
+RESET_SOURCE_STATUS sctrl_get_wake_soure_status(void)
+{
+    extern RESET_SOURCE_STATUS waked_source;
+    return waked_source;
+}
+
 #if PS_DTIM_WITH_NORMAL
 /** @brief  Open dtim with normal flag
  */
@@ -1395,8 +1444,8 @@ BK_PS_LEVEL global_ps_level = 0;
 int bk_wlan_power_save_set_level(BK_PS_LEVEL level)
 {
 	PS_DEEP_CTRL_PARAM deep_sleep_param;
-	deep_sleep_param.gpio_index_map = 0xc000;
-	deep_sleep_param.gpio_edge_map  = 0x0;
+	deep_sleep_param.gpio_index_lo_map = 0xc000;
+	deep_sleep_param.gpio_edge_lo_map  = 0x0;
 	deep_sleep_param.wake_up_way = PS_DEEP_WAKEUP_GPIO;
 
     if(level & PS_DEEP_SLEEP_BIT)
@@ -1571,6 +1620,43 @@ OSStatus bk_wlan_sta_is_connected(void)
 	return 0;
 }
 #endif
+
+UINT32 if_other_mode_rf_sleep(void)
+{
+    if(!bk_wlan_has_role(VIF_AP)
+        &&!bk_wlan_has_role(VIF_MESH_POINT)
+        &&!bk_wlan_has_role(VIF_IBSS)
+        &&!bk_wlan_is_monitor_mode())
+    {
+        return 1;
+    }
+    else
+        {
+        return 0;
+    }
+}
+
+int bk_wlan_unconditional_rf_powerup(void)
+{
+    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_UNCONDITIONAL_RF_UP, 0);
+    sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_UNCONDITIONAL_MAC_UP, 0);
+	return 0;
+}
+
+int bk_wlan_unconditional_rf_powerdown(void)
+{
+    if(if_other_mode_rf_sleep()
+        &&(!bk_wlan_has_role(VIF_STA)))
+    {
+        sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_UNCONDITIONAL_RF_DOWN, 0);
+        sddev_control(SCTRL_DEV_NAME, CMD_SCTRL_UNCONDITIONAL_MAC_DOWN, 0);
+    	return 0;
+    }
+    else
+        {
+        return -1;
+    }
+}
 
 #if CFG_SUPPORT_ALIOS
 /**********************for alios*******************************/

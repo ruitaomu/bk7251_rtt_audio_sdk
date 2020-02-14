@@ -33,10 +33,13 @@ void MGC_FunctionPreparePipe(MGC_Port *pPort, MGC_Pipe *pPipe,
                              const MUSB_EndpointDescriptor *pEndpoint)
 {
     uint8_t bTrafficType = pEndpoint->bmAttributes & MUSB_ENDPOINT_XFERTYPE_MASK;
+
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionPreparePipe: pEndpoint->bmAttributes = 0x%x\r\n", pEndpoint->bmAttributes);
     pPipe->hSession = hBus;
     pPipe->pPort = pPort;
     pPipe->pLocalEnd = pResource;
-    if(pEndpoint->bEndpointAddress & MUSB_DIR_IN)
+    if (pEndpoint->bEndpointAddress & MUSB_DIR_IN)
     {
         pPipe->bmFlags = MGC_PIPEFLAGS_TRANSMIT;
         pResource->pTxIrp = NULL;
@@ -73,23 +76,30 @@ static uint32_t MGC_FunctionSetInterface(MGC_Port *pPort, uint8_t bIfaceIndex,
     const MUSB_EndpointDescriptor *pEndDesc;
     uint32_t dwStatus = MUSB_STATUS_OK;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionSetInterface: bIfaceIndex = 0x%x, bAltSetting = 0x%x\r\n", bIfaceIndex, bAltSetting);
     Endpoint.wNakLimit = 0xffff;
 
     pIfaceDesc = MUSB_FindInterfaceDescriptor(pPort->pCurrentConfig,
-                 bIfaceIndex, bAltSetting);
-    if(pIfaceDesc)
+                        bIfaceIndex, bAltSetting);
+    MUSB_DPRINTF("MGC_FunctionSetInterface: pIfaceDesc = 0x%p\r\n", pIfaceDesc);
+    if (pIfaceDesc)
     {
+        MUSB_DPRINTF("MGC_FunctionSetInterface: pIfaceDesc->bNumEndpoints = %d\r\n", pIfaceDesc->bNumEndpoints);
 
         /* clear & re-bind each end */
-        for(bEndIndex = 0; bEndIndex < pIfaceDesc->bNumEndpoints; bEndIndex++)
+        for (bEndIndex = 0; bEndIndex < pIfaceDesc->bNumEndpoints; bEndIndex++)
         {
+            MUSB_DPRINTF("MGC_FunctionSetInterface: bEndIndex = %d\r\n", bEndIndex);
             pEndDesc = MUSB_FindEndpointDescriptor(pPort->pCurrentConfig,
                                                    pIfaceDesc, bEndIndex);
-            if(pEndDesc)
+            MUSB_DPRINTF("MGC_FunctionSetInterface: pEndDesc = 0x%p\r\n", pEndDesc);
+            if (pEndDesc)
             {
                 pResource = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds),
                             pEndDesc->bEndpointAddress & MUSB_ENDPOINT_NUMBER_MASK);
-                if(pResource)
+                MUSB_DPRINTF("MGC_FunctionSetInterface: pResource = 0x%p\r\n", pResource);
+                if (pResource)
                 {
                     /* clear state from last use */
 #ifdef MUSB_C_DYNFIFO_DEF
@@ -100,16 +110,18 @@ static uint32_t MGC_FunctionSetInterface(MGC_Port *pPort, uint8_t bIfaceIndex,
                     /* bind */
                     MUSB_MemCopy((void *) & (Endpoint.UsbDescriptor),
                                  (void *)pEndDesc, sizeof(MUSB_EndpointDescriptor));
+                    MUSB_DPRINTF("MGC_FunctionSetInterface:  bmAttributes = 0x%x\r\n", pEndDesc->bmAttributes);
                     pResource = NULL;
                     if (pPort->pfBindEndpoint)
                     {
                         pResource = pPort->pfBindEndpoint(pPort, &Endpoint, NULL, TRUE);
                     }
-
+                    MUSB_DPRINTF("MGC_FunctionSetInterface:  pResource = 0x%p\r\n", pResource);
                     /* break on failure */
-                    if(!pResource)
+                    if (!pResource)
                     {
                         dwStatus = MUSB_STATUS_NO_RESOURCES;
+                        MUSB_ERR_PRINTF("MGC_FunctionSetInterface: MUSB_STATUS_NO_RESOURCES\r\n");
                         break;
                     }
                     /* prepare pipe */
@@ -125,7 +137,8 @@ static uint32_t MGC_FunctionSetInterface(MGC_Port *pPort, uint8_t bIfaceIndex,
         dwStatus = MUSB_STATUS_BAD_DESCRIPTORS;
     }
 
-    if(MUSB_STATUS_OK == dwStatus)
+    MUSB_DPRINTF("MGC_FunctionSetInterface: 1 dwStatus = 0x%lx, bOk = %d\r\n", dwStatus, bOk);
+    if (MUSB_STATUS_OK == dwStatus)
     {
         if (pPort->pFunctionClient->pfInterfaceSet)
         {
@@ -136,6 +149,7 @@ static uint32_t MGC_FunctionSetInterface(MGC_Port *pPort, uint8_t bIfaceIndex,
         }
     }
 
+    MUSB_DPRINTF("MGC_FunctionSetInterface: 2 dwStatus = 0x%lx, bOk = %d\r\n", dwStatus, bOk);
     return dwStatus;
 }
 
@@ -164,6 +178,8 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
     uint8_t bMaxFunctionEnds = 0;
     uint32_t dwStatus = MUSB_STATUS_OK;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionBindConfig\r\n");
     MUSB_MemSet(&Device, 0, sizeof(Device));
     Device.pPort = pPort->pInterfacePort;
     Endpoint.pDevice = &Device;
@@ -177,10 +193,11 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
 
     /* clear all current endpoints */
     bEndCount = (uint8_t)MUSB_ArrayLength(&(pPort->LocalEnds));
-    for(bEndIndex = 1; bEndIndex < bEndCount; bEndIndex++)
+    for (bEndIndex = 1; bEndIndex < bEndCount; bEndIndex++)
     {
         pResource = (MGC_EndpointResource *)MUSB_ArrayFetch(&(pPort->LocalEnds), bEndIndex);
-        if(pResource)
+        MUSB_DPRINTF("MGC_FunctionBindConfig: pResource = 0x%p\r\n\r\n", pResource);
+        if (pResource)
         {
 #ifdef MUSB_C_DYNFIFO_DEF
             pResource->wMaxPacketSizeTx = pResource->wMaxPacketSizeRx = 0;
@@ -193,18 +210,21 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
     wLength = MUSB_SWAP16P((uint8_t *) & (pConfigDesc->wTotalLength));
     bLastIface = 0;
     bMaxIfaceEnds = 0;
-    for(bIfaceIndex = 0; !dwStatus; bIfaceIndex++)
+    for (bIfaceIndex = 0; !dwStatus; bIfaceIndex++)
     {
+        MUSB_DPRINTF("MGC_FunctionBindConfig: wLength = 0x%x, bIfaceIndex = %d\r\n", wLength, bIfaceIndex);
         /* find interface */
         pDesc = MGC_FindDescriptor((uint8_t *)pConfigDesc,
                                    wLength, MUSB_DT_INTERFACE, bIfaceIndex);
         /* break when no more */
-        if(!pDesc)
+        if (!pDesc)
         {
             /* update max endpoints for this config */
             bMaxFunctionEnds += bMaxIfaceEnds;
+            MUSB_DPRINTF("MGC_FunctionBindConfig: bLastIface = 0x%x, pConfigDesc->bNumInterfaces = %d\r\n",
+                          bLastIface, pConfigDesc->bNumInterfaces);
             /* fail if we didn't find all interfaces stated in the config */
-            if(bLastIface < (pConfigDesc->bNumInterfaces - 1))
+            if (bLastIface < (pConfigDesc->bNumInterfaces - 1))
             {
                 dwStatus = MUSB_STATUS_BAD_DESCRIPTORS;
             }
@@ -220,10 +240,11 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
          * endpoints, because MGC_FunctionSetInterface() performs the actual
          * binding of alternates.
          */
-        if(pIfaceDesc->bAlternateSetting)
+        if (pIfaceDesc->bAlternateSetting)
         {
+            MUSB_DPRINTF("MGC_FunctionBindConfig: pIfaceDesc->bAlternateSetting = 0x%x\r\n", pIfaceDesc->bAlternateSetting);
             bReallyBind = FALSE;
-            if(pIfaceDesc->bNumEndpoints > bMaxIfaceEnds)
+            if (pIfaceDesc->bNumEndpoints > bMaxIfaceEnds)
             {
                 /* update max ends for this iface */
                 bMaxIfaceEnds = pIfaceDesc->bNumEndpoints;
@@ -235,7 +256,7 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
             bReallyBind = bBind;
             /* update max ends for this config */
             bMaxFunctionEnds += bMaxIfaceEnds;
-            if(pIfaceDesc->bInterfaceNumber > 0)
+            if (pIfaceDesc->bInterfaceNumber > 0)
             {
                 /* set offset for this iface */
                 pPort->abIfaceOffsets[pIfaceDesc->bInterfaceNumber] =
@@ -250,14 +271,21 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
         }
 
         wLimit = wLength - (uint16_t)((uint8_t *)pIfaceDesc - (uint8_t *)pConfigDesc);
-        for(bEndIndex = 0; (bEndIndex < pIfaceDesc->bNumEndpoints) && !dwStatus;
+        MUSB_DPRINTF("MGC_FunctionBindConfig: pIfaceDesc = 0x%p, pConfigDesc = 0x%p\r\n", pIfaceDesc, pConfigDesc);
+        MUSB_DPRINTF("MGC_FunctionBindConfig: wLength = 0x%x, wLimit = 0x%x\r\n", wLength, wLimit);
+        MUSB_DPRINTF("MGC_FunctionBindConfig: pIfaceDesc->bNumEndpoints = %d\r\n", pIfaceDesc->bNumEndpoints);
+        for (bEndIndex = 0; (bEndIndex < pIfaceDesc->bNumEndpoints) && !dwStatus;
                 bEndIndex++)
         {
+            MUSB_DPRINTF("MGC_FunctionBindConfig: bEndIndex = %d, pIfaceDesc->bNumEndpoints = %d\r\n",
+                         bEndIndex, pIfaceDesc->bNumEndpoints);
             /* find endpoint */
             pDesc = MGC_FindDescriptor((uint8_t *)pIfaceDesc, wLimit,
                                        MUSB_DT_ENDPOINT, bEndIndex);
+            MUSB_DPRINTF("MGC_FunctionBindConfig: pDesc = 0x%p, pDesc->bmAttributes = 0x%x\r\n",
+                    pDesc, ((MUSB_EndpointDescriptor*)pDesc)->bmAttributes);
             /* break on failure */
-            if(!pDesc)
+            if (!pDesc)
             {
                 dwStatus = MUSB_STATUS_BAD_DESCRIPTORS;
                 break;
@@ -266,15 +294,19 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
             pEndDesc = (MUSB_EndpointDescriptor *)pDesc;
             MUSB_MemCopy((void *) & (Endpoint.UsbDescriptor),
                          (void *)pEndDesc, sizeof(MUSB_EndpointDescriptor));
+            MUSB_DPRINTF("MGC_FunctionBindConfig: bReallyBind = 0x%x\r\n", bReallyBind);
+            // MGC_FdrcBindEndpoint()
             pResource = pPort->pfBindEndpoint(pPort, &Endpoint, NULL, bReallyBind);
+            MUSB_DPRINTF("MGC_FunctionBindConfig: pResource = 0x%p\r\n", pResource);
+//            MUSB_DPRINTF("MGC_FunctionBindConfig: pResource = 0x%p, bReallyBind = 0x%x\r\n", pResource, bReallyBind);
             /* break on failure */
-            if(!pResource)
+            if (!pResource)
             {
                 dwStatus = MUSB_STATUS_NO_RESOURCES;
                 break;
             }
             /* if really binding, prepare pipe */
-            if(bReallyBind)
+            if (bReallyBind)
             {
                 MGC_FunctionPreparePipe(pPort,
                                         pPort->apPipe[bEndIndex + pPort->abIfaceOffsets[pIfaceDesc->bInterfaceNumber]],
@@ -286,7 +318,7 @@ static uint32_t MGC_FunctionBindConfig(MGC_Port *pPort,
     /*
      * Update the maximum end count if needed.
      */
-    if(bMaxFunctionEnds > pPort->bMaxFunctionEnds)
+    if (bMaxFunctionEnds > pPort->bMaxFunctionEnds)
     {
         pPort->bMaxFunctionEnds = bMaxFunctionEnds;
     }
@@ -313,20 +345,29 @@ static uint32_t MGC_FunctionVerifyResources(MGC_Port *pPort, const uint8_t *pDes
     const MUSB_ConfigurationDescriptor *pConfigDesc;
     uint32_t dwStatus = MUSB_STATUS_OK;
 
-    for(bConfigIndex = 0;
-            (bConfigIndex < bNumConfigurations) && !dwStatus;
-            bConfigIndex++)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionVerifyResources: ----1\r\n");
+    MUSB_DPRINTF("MGC_FunctionVerifyResources: pDescriptorBuffer = 0x%p, wDescriptorBufferLength = 0x%x, "
+           "bNumConfigurations = 0x%x, bType = %d, bVerify = %d\r\n",
+            pDescriptorBuffer, wDescriptorBufferLength, bNumConfigurations, bType, bVerify);
+    for (bConfigIndex = 0;
+         (bConfigIndex < bNumConfigurations) && !dwStatus;
+         bConfigIndex ++)
     {
+        MUSB_DPRINTF("MGC_FunctionVerifyResources: ----2\r\n");
         pDesc = MGC_FindDescriptor(pDescriptorBuffer, wDescriptorBufferLength,
                                    bType, bConfigIndex);
-        if(pDesc)
+        MUSB_DPRINTF("MGC_FunctionVerifyResources: pDesc = 0x%p\r\n", pDesc);
+        if (pDesc)
         {
             /* config found */
             pConfigDesc = (MUSB_ConfigurationDescriptor *)pDesc;
             /* verify or set pointer */
-            if(bVerify)
+            if (bVerify)
             {
+                MUSB_DPRINTF("MGC_FunctionVerifyResources: ----3\r\n");
                 dwStatus = MGC_FunctionBindConfig(pPort, pConfigDesc, FALSE);
+                MUSB_DPRINTF("MGC_FunctionVerifyResources: dwStatus = 0x%lx\r\n", dwStatus);
             }
             else
             {
@@ -358,49 +399,81 @@ uint32_t MGC_FunctionRegisterClient(MGC_Port *pPort,
         (MUSB_QualifierDescriptor *)pClient->pHighSpeedDescriptors;
     uint8_t bNumConfigurations = pDeviceDesc->bNumConfigurations;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     pPort->bParse = TRUE;
     /* allocate convenience pointers for each config */
-    if(pClient->wHighSpeedDescriptorLength >= sizeof(MUSB_QualifierDescriptor))
+    if (pClient->wHighSpeedDescriptorLength >= sizeof(MUSB_QualifierDescriptor))
     {
         bNumConfigurations = MUSB_MAX(bNumConfigurations, pQualifierDesc->bNumConfigurations);
     }
 
-
-    pPort->apConfigDescriptors = (const MUSB_ConfigurationDescriptor **)MUSB_MemAlloc(
-                                     bNumConfigurations * sizeof(MUSB_ConfigurationDescriptor *));
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->apConfigDescriptors = 0x%p\r\n",
+    		pPort->apConfigDescriptors);
+	MUSB_DPRINTF("MGC_FunctionRegisterClient: bnumconfiguration = 0x%x, sizeof(MUSB_ConfigurationDescriptor*) = 0x%x\r\n",
+			  bNumConfigurations, sizeof(MUSB_ConfigurationDescriptor*));
     if (pPort->apConfigDescriptors)
     {
-        /* find each config; verify resources and set config pointers */
-        pPort->bMaxFunctionEnds = 0;
-        dwStatus = MGC_FunctionVerifyResources(pPort, pClient->pStandardDescriptors,
-                                               pClient->wDescriptorBufferLength, pDeviceDesc->bNumConfigurations,
-                                               MUSB_DT_CONFIG, TRUE);
-
-        MUSB_PRT("[MGC] FunctionRegisterClient :%x\r\n", dwStatus);
-        if(!dwStatus && (pClient->wHighSpeedDescriptorLength > sizeof(MUSB_QualifierDescriptor)))
-        {
-            dwStatus = MGC_FunctionVerifyResources(pPort, pClient->pHighSpeedDescriptors,
-                                                   pClient->wHighSpeedDescriptorLength, pQualifierDesc->bNumConfigurations,
-                                                   MUSB_DT_OTHER_SPEED, TRUE);
-            MUSB_PRT("[MGC] FunctionRegisterClient dwstatus :%x\r\n", dwStatus);
-        }
+        MUSB_MemFree(pPort->apConfigDescriptors);
+    }
+    pPort->apConfigDescriptors = (const MUSB_ConfigurationDescriptor **)MUSB_MemAlloc(
+                                     bNumConfigurations * sizeof(MUSB_ConfigurationDescriptor *));
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->apConfigDescriptors = 0x%p\r\n",
+            pPort->apConfigDescriptors);
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: MGC_aDescriptorData = 0x%p, MGC_aHighSpeedDescriptorData = 0x%p\r\n",
+            pMGC_aDescriptorData, pMGC_aHighSpeedDescriptorData);
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: ulMGC_aDescriptorDataLen = %ld, ulMGC_aHighSpeedDescriptorDataLen = %ld\r\n",
+            ulMGC_aDescriptorDataLen, ulMGC_aHighSpeedDescriptorDataLen);
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->apConfigDescriptors = 0x%p\r\n", pPort->apConfigDescriptors);
+    if (pPort->apConfigDescriptors)
+    {
+        MUSB_MemSet(pPort->apConfigDescriptors, 0, 
+                    bNumConfigurations * sizeof(MUSB_ConfigurationDescriptor*));
+		/* find each config; verify resources and set config pointers */
+		pPort->bMaxFunctionEnds = 0;
+		dwStatus = MGC_FunctionVerifyResources(pPort, pClient->pStandardDescriptors,
+                        pClient->wDescriptorBufferLength, pDeviceDesc->bNumConfigurations,
+                        MUSB_DT_CONFIG, TRUE);
+		MUSB_DPRINTF("MGC_FunctionRegisterClient 1 dwstatus : 0x%lx\r\n", dwStatus);
+		if (!dwStatus && (pClient->wHighSpeedDescriptorLength > sizeof(MUSB_QualifierDescriptor)))
+		{
+		    dwStatus = MGC_FunctionVerifyResources(pPort, pClient->pHighSpeedDescriptors,
+                            pClient->wHighSpeedDescriptorLength, pQualifierDesc->bNumConfigurations,
+                            MUSB_DT_OTHER_SPEED, TRUE);
+            MUSB_DPRINTF("MGC_FunctionRegisterClient 2 dwstatus :0x%lx\r\n",dwStatus);
+		}
     }
     else
     {
+        MUSB_ERR_PRINTF("MGC_FunctionRegisterClient: MUSB_MemAlloc 1 failed\r\n");
         dwStatus = MUSB_STATUS_NO_MEMORY;
     }
 
     /* if we are OK; allocate pipe memory now */
-    if(pPort->bMaxFunctionEnds && (0 == dwStatus))
+    MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->bMaxFunctionEnds = %d\r\n", pPort->bMaxFunctionEnds);
+    if (pPort->bMaxFunctionEnds && (0 == dwStatus))
     {
-        pPort->apPipe = (MGC_Pipe **)MUSB_MemAlloc(
-                            pPort->bMaxFunctionEnds * sizeof(MGC_Pipe *));
+        MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->apPipe = 0x%p\r\n",
+        			pPort->apPipe);
+        MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->bMaxFunctionEnds = 0x%x, sizeof(MGC_Pipe*)=0x%x\r\n",
+        		    pPort->bMaxFunctionEnds, sizeof(MGC_Pipe*));
         if (pPort->apPipe)
         {
-            pPipe = (MGC_Pipe *)MUSB_MemAlloc(
-                        pPort->bMaxFunctionEnds * sizeof(MGC_Pipe));
+            MUSB_MemFree(pPort->apPipe);
+        }
+        pPort->apPipe = (MGC_Pipe **)MUSB_MemAlloc(
+                            pPort->bMaxFunctionEnds * sizeof(MGC_Pipe *));
+        MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->apPipe = 0x%p\r\n",
+        		pPort->apPipe);
+        if (pPort->apPipe)
+        {
+            MUSB_MemSet(pPort->apPipe, 0, pPort->bMaxFunctionEnds * sizeof(MGC_Pipe*));
+            MUSB_DPRINTF("MGC_FunctionRegisterClient: pPort->bMaxFunctionEnds = 0x%x, sizeof(MGC_Pipe)=0x%x\r\n",
+        		    pPort->bMaxFunctionEnds, sizeof(MGC_Pipe));
+
+			pPipe = (MGC_Pipe*)MUSB_MemAlloc(pPort->bMaxFunctionEnds * sizeof(MGC_Pipe));
             if (pPipe)
             {
+                MUSB_MemSet(pPipe, 0, pPort->bMaxFunctionEnds * sizeof(MGC_Pipe));
                 for (bEndIndex = 0; bEndIndex < pPort->bMaxFunctionEnds; bEndIndex++)
                 {
                     pPort->apPipe[bEndIndex] = pPipe++;
@@ -408,6 +481,7 @@ uint32_t MGC_FunctionRegisterClient(MGC_Port *pPort,
             }
             else
             {
+				MUSB_ERR_PRINTF("MGC_FunctionRegisterClient: MUSB_MemAlloc 3 failed\r\n");
                 MUSB_MemFree(pPort->apPipe);
                 pPort->apPipe = NULL;
                 dwStatus = MUSB_STATUS_NO_MEMORY;
@@ -415,12 +489,13 @@ uint32_t MGC_FunctionRegisterClient(MGC_Port *pPort,
         }
         else
         {
+				MUSB_ERR_PRINTF("MGC_FunctionRegisterClient: MUSB_MemAlloc 2 failed\r\n");
             dwStatus = MUSB_STATUS_NO_MEMORY;
         }
     }
 
     /* possibly clean up */
-    if(dwStatus && pPort->apConfigDescriptors)
+    if (dwStatus && pPort->apConfigDescriptors)
     {
         MUSB_MemFree((void *)pPort->apConfigDescriptors);
         pPort->apConfigDescriptors = NULL;
@@ -431,12 +506,13 @@ uint32_t MGC_FunctionRegisterClient(MGC_Port *pPort,
 
 uint32_t MGC_FunctionDestroy(MGC_Port *pPort)
 {
-    if(pPort->apConfigDescriptors)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort->apConfigDescriptors)
     {
         MUSB_MemFree(pPort->apConfigDescriptors);
         pPort->apConfigDescriptors = NULL;
     }
-    if(pPort->apPipe)
+    if (pPort->apPipe)
     {
         MUSB_MemFree(pPort->apPipe[0]);
         MUSB_MemFree(pPort->apPipe);
@@ -462,31 +538,40 @@ static uint8_t MGC_FunctionConfigSelected(MGC_Port *pPort, uint8_t bConfigValue)
         (MUSB_QualifierDescriptor *)pPort->pFunctionClient->pHighSpeedDescriptors;
     uint8_t bNumConfigurations = pDeviceDesc->bNumConfigurations;
 
-    if(pPort->bIsHighSpeed && pQualifierDesc)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+
+    MUSB_DPRINTF("MGC_FunctionConfigSelected: bConfigValue = %d\r\n", bConfigValue);
+
+    if (pPort->bIsHighSpeed && pQualifierDesc)
     {
         bNumConfigurations = pQualifierDesc->bNumConfigurations;
     }
 
+    MUSB_DPRINTF("MGC_FunctionConfigSelected: bNumConfigurations = %d\r\n", bNumConfigurations);
+
     /* find config */
     pPort->pCurrentConfig = NULL;
-    for(bConfig = 0; bConfig < bNumConfigurations; bConfig++)
+    for (bConfig = 0; bConfig < bNumConfigurations; bConfig++)
     {
         pConfigDesc = (MUSB_ConfigurationDescriptor *)pPort->apConfigDescriptors[bConfig];
-        if(pConfigDesc->bConfigurationValue == bConfigValue)
+        if (pConfigDesc->bConfigurationValue == bConfigValue)
         {
             pPort->pCurrentConfig = pConfigDesc;
             break;
         }
     }
+    MUSB_DPRINTF("MGC_FunctionConfigSelected: pPort->pCurrentConfig = 0x%p\r\n", pPort->pCurrentConfig);
 
-    if(pPort->pCurrentConfig)
+    if (pPort->pCurrentConfig)
     {
         /* try to really bind config */
         dwStatus = MGC_FunctionBindConfig(pPort, pPort->pCurrentConfig, TRUE);
-        if(MUSB_STATUS_OK == dwStatus)
+        MUSB_DPRINTF("MGC_FunctionConfigSelected: dwStatus = 0x%lx\r\n", dwStatus);
+        if (MUSB_STATUS_OK == dwStatus)
         {
             /* commit config and call client */
             pPort->bConfigValue = bConfigValue;
+            // MGC_MsdDeviceConfigSelected()
             pPort->pFunctionClient->pfDeviceConfigSelected(
                 pPort->pFunctionClient->pPrivateData, (MUSB_BusHandle)pPort,
                 bConfigValue, (MUSB_PipePtr *)pPort->apPipe);
@@ -507,11 +592,15 @@ void MGC_FunctionSpeedSet(MGC_Port *pPort)
     const MUSB_DeviceDescriptor *pDeviceDesc;
     const MUSB_QualifierDescriptor *pQualifierDesc;
 
-    if(pPort->pFunctionClient)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionSpeedSet: pPort = 0x%p, pPort->pFunctionClient = 0x%p\r\n", pPort, pPort->pFunctionClient);
+    if (pPort->pFunctionClient)
     {
         pDeviceDesc = (MUSB_DeviceDescriptor *)pPort->pFunctionClient->pStandardDescriptors;
         pQualifierDesc = (MUSB_QualifierDescriptor *)pPort->pFunctionClient->pHighSpeedDescriptors;
-        if(pPort->bIsHighSpeed && pQualifierDesc)
+        MUSB_DPRINTF("MGC_FunctionSpeedSet: pDeviceDesc = 0x%p, pQualifierDesc = 0x%p, pPort->bIsHighSpeed = %d\r\n",
+            pDeviceDesc, pQualifierDesc, pPort->bIsHighSpeed);
+        if (pPort->bIsHighSpeed && pQualifierDesc)
         {
             dwStatus = MGC_FunctionVerifyResources(pPort,
                                                    pPort->pFunctionClient->pHighSpeedDescriptors,
@@ -564,6 +653,8 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
     const uint8_t *pScan = pPort->pFunctionClient->pStandardDescriptors;
     const uint8_t *pScanLimit = pScan + pPort->pFunctionClient->wDescriptorBufferLength;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    MUSB_DPRINTF("MGC_FunctionParseSetup\r\n");
     /* seed success */
     *pbStatus = MUSB_STATUS_OK;
     pPort->pSetupData = pPort->pFunctionClient->pControlBuffer;
@@ -582,10 +673,11 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
         switch (pRequest->bRequest)
         {
         case MUSB_REQ_GET_STATUS:
-            if((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_GET_STATUS\r\n");
+            if ((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
             {
                 /* we handle device, interface, and endpoint recipients */
-                if(MUSB_RECIP_DEVICE == bRecip)
+                if (MUSB_RECIP_DEVICE == bRecip)
                 {
                     bOurs = TRUE;
                     pPort->pSetupData[0] = *(pPort->pFunctionClient->pbSelfPowered) ? 1 : 0;
@@ -593,12 +685,12 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     pPort->pSetupData[1] = 0;
                     pPort->wSetupDataSize = 2;
                 }
-                else if(MUSB_RECIP_INTERFACE == bRecip)
+                else if (MUSB_RECIP_INTERFACE == bRecip)
                 {
                     pDesc = MGC_FindDescriptor((uint8_t *)pPort->pCurrentConfig,
                                                MUSB_SWAP16P((uint8_t *) & (pPort->pCurrentConfig->wTotalLength)),
                                                MUSB_DT_INTERFACE, (uint8_t)wIndex);
-                    if(pDesc)
+                    if (pDesc)
                     {
                         pPort->pSetupData[0] = 0;
                         pPort->pSetupData[1] = 0;
@@ -609,13 +701,13 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                         *pbStatus = MUSB_STATUS_STALLED;
                     }
                 }
-                else if(MUSB_RECIP_ENDPOINT == bRecip)
+                else if (MUSB_RECIP_ENDPOINT == bRecip)
                 {
                     bOurs = TRUE;
                     bEnd = (uint8_t)wIndex;
                     pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(
                                &(pPort->LocalEnds), bEnd & MUSB_ENDPOINT_NUMBER_MASK);
-                    if(pEnd)
+                    if (pEnd)
                     {
                         pPort->pSetupData[0] = pEnd->bIsHalted ? 1 : 0;
                         pPort->pSetupData[1] = 0;
@@ -634,15 +726,16 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             break;
 
         case MUSB_REQ_CLEAR_FEATURE:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_CLEAR_FEATURE\r\n");
             /* we handle device, interface (nothing defined) and endpoint */
-            if((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
+            if ((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
             {
-                switch(bRecip)
+                switch (bRecip)
                 {
                 case MUSB_RECIP_DEVICE:
                     bOurs = TRUE;
                     pPort->wSetupDataSize = 0;
-                    if(MUSB_FEATURE_DEVICE_REMOTE_WAKEUP == wValue)
+                    if (MUSB_FEATURE_DEVICE_REMOTE_WAKEUP == wValue)
                     {
                         pPort->bCanWakeup = FALSE;
                     }
@@ -660,22 +753,22 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     *pbStatus = MUSB_STATUS_STALLED;
                     pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(
                                &(pPort->LocalEnds), bEnd & MUSB_ENDPOINT_NUMBER_MASK);
-                    if(pEnd)
+                    if (pEnd)
                     {
                         *pbStatus = MUSB_STATUS_OK;
                         pEnd->bIsHalted = FALSE;
                         pPort->pfProgramHaltEndpoint(pPort, pEnd,
                                                      bEnd & MUSB_ENDPOINT_DIR_MASK, FALSE);
                         /* start any pending bulk/interrupt Tx */
-                        switch(pEnd->bTrafficType)
+                        switch (pEnd->bTrafficType & MUSB_ENDPOINT_XFERTYPE_MASK)
                         {
                         case MUSB_ENDPOINT_XFER_BULK:
                         case MUSB_ENDPOINT_XFER_INT:
                             pIrp = (MUSB_Irp *)pEnd->pTxIrp;
-                            if(pIrp)
+                            if (pIrp)
                             {
                                 pPipe = (MGC_Pipe *)pIrp->hPipe;
-                                if(pPipe && (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT))
+                                if (pPipe && (pPipe->bmFlags & MGC_PIPEFLAGS_TRANSMIT))
                                 {
                                     pPort->pfProgramStartTransmit(pPort, pEnd,
                                                                   pIrp->pBuffer, pIrp->dwLength, pIrp);
@@ -694,35 +787,36 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             break;
 
         case MUSB_REQ_SET_FEATURE:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_SET_FEATURE\r\n");
             /* we handle device, interface (nothing defined) and endpoint */
-            if((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
+            if ((pPort->bUsbState >= MUSB_ADDRESS) || (0 == wIndex))
             {
-                switch(bRecip)
+                switch (bRecip)
                 {
                 case MUSB_RECIP_DEVICE:
                     bOurs = TRUE;
                     pPort->wSetupDataSize = 0;
                     /* seed failure and prove success */
                     *pbStatus = MUSB_STATUS_STALLED;
-                    if(MUSB_FEATURE_DEVICE_REMOTE_WAKEUP == wValue)
+                    if (MUSB_FEATURE_DEVICE_REMOTE_WAKEUP == wValue)
                     {
                         pPort->bCanWakeup = TRUE;
                         *pbStatus = MUSB_STATUS_OK;
                     }
-                    else if(pPort->bIsHighSpeed && (MUSB_FEATURE_TEST_MODE == wValue))
+                    else if (pPort->bIsHighSpeed && (MUSB_FEATURE_TEST_MODE == wValue))
                     {
                         pPort->bWantTestMode = TRUE;
                         pPort->bTestMode = (uint8_t)(wIndex >> 8);
                         *pbStatus = MUSB_STATUS_OK;
                     }
 #ifdef MUSB_OTG
-                    else if(MUSB_b_hnp_enable == wValue)
+                    else if (MUSB_b_hnp_enable == wValue)
                     {
                         /* only succeed if we support HNP */
-                        if(pPort->bIsHnpSupported)
+                        if (pPort->bIsHnpSupported)
                         {
                             pPort->bIsHnpAllowed = TRUE;
-                            if(*(pPort->pOtgClient->pbDesireHostRole))
+                            if (*(pPort->pOtgClient->pbDesireHostRole))
                             {
                                 pPort->bWantHost = TRUE;
                                 pPort->pfProgramBusState(pPort);
@@ -730,13 +824,13 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                             *pbStatus = MUSB_STATUS_OK;
                         }
                     }
-                    else if(MUSB_a_hnp_support == wValue)
+                    else if (MUSB_a_hnp_support == wValue)
                     {
                         /* nothing to remember */
                         /*MGC_DIAG(2, pPort->pController, "A-device and connection supports HNP");*/
                         *pbStatus = MUSB_STATUS_OK;
                     }
-                    else if(MUSB_a_alt_hnp_support == wValue)
+                    else if (MUSB_a_alt_hnp_support == wValue)
                     {
                         /* nothing to remember */
                         /*MGC_DIAG(2, pPort->pController, "A-device supports HNP on another port");*/
@@ -758,7 +852,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     *pbStatus = MUSB_STATUS_STALLED;
                     pEnd = (MGC_EndpointResource *)MUSB_ArrayFetch(
                                &(pPort->LocalEnds), bEnd & MUSB_ENDPOINT_NUMBER_MASK);
-                    if(pEnd)
+                    if (pEnd)
                     {
                         *pbStatus = MUSB_STATUS_OK;
                         pEnd->bIsHalted = TRUE;
@@ -771,37 +865,46 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             break;
 
         case MUSB_REQ_SET_ADDRESS:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_SET_ADDRESS\r\n");
+//            msg_put(MSG_USB_DEVICE_ENUM_START);
             bOurs = TRUE;
             pPort->wSetupDataSize = 0;
-            if((pPort->bUsbState < MUSB_ADDRESS) || pPort->bSetAddress)
+            MUSB_DPRINTF("MGC_FunctionParseSetup: pPort->bUsbState = 0x%x, pPort->bSetAddress = 0x%x\r\n",
+                    pPort->bUsbState, pPort->bSetAddress);
+            if ((pPort->bUsbState < MUSB_ADDRESS) || pPort->bSetAddress)
             {
+                MUSB_DPRINTF("MGC_FunctionParseSetup: MGC_FunctionChangeState\r\n");
                 pPort->bSetAddress = TRUE;
                 pPort->bFuncAddr = (uint8_t)(wValue & 0x7f);
                 MGC_FunctionChangeState(pPort, MUSB_ADDRESS);
             }
             else
             {
+                MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_STATUS_STALLED!!!!!!\r\n");
                 *pbStatus = MUSB_STATUS_STALLED;
             }
             break;
 
         case MUSB_REQ_GET_DESCRIPTOR:
-            if(MUSB_RECIP_DEVICE == bRecip)
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_GET_DESCRIPTOR\r\n");
+            MUSB_DPRINTF("GET_DESCRIPTOR: bRecip=%d, wValue=0x%x, wIndex=0x%x\r\n", bRecip, wValue, wIndex);
+            if (MUSB_RECIP_DEVICE == bRecip)
             {
                 bOurs = TRUE;
                 wLength = MUSB_SWAP16P((uint8_t *) & (pRequest->wLength));
                 bOK = FALSE;
                 bType = bQueryType = (uint8_t)(wValue >> 8);
-                wWhich = wValue & 0xff;
+                wWhich = wValue & 0x00FF;
                 wIter = 0;
 
                 /* do a little dance if we have high-speed descriptors */
-                if(pPort->pFunctionClient->pHighSpeedDescriptors)
+                if (pPort->pFunctionClient->pHighSpeedDescriptors)
                 {
-                    switch(bType)
+                    MUSB_DPRINTF("dance start bType=0x%x\r\n", bType);
+                    switch (bType)
                     {
                     case MUSB_DT_DEVICE:
-                        if(pPort->bIsHighSpeed)
+                        if (pPort->bIsHighSpeed)
                         {
                             /* we are at high-speed, so use full-speed and switch the type */
                             bSwitchDescriptor = TRUE;
@@ -809,7 +912,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                         break;
 
                     case MUSB_DT_DEVICE_QUALIFIER:
-                        if(pPort->bIsHighSpeed)
+                        if (pPort->bIsHighSpeed)
                         {
                             /* we are at high-speed, so use full-speed and switch the type */
                             bSwitchDescriptor = TRUE;
@@ -824,7 +927,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                         break;
 
                     case MUSB_DT_CONFIG:
-                        if(pPort->bIsHighSpeed)
+                        if (pPort->bIsHighSpeed)
                         {
                             /* we are at high-speed, so search high-speed and switch the type */
                             pScan = pPort->pFunctionClient->pHighSpeedDescriptors;
@@ -835,7 +938,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                         break;
 
                     case MUSB_DT_OTHER_SPEED:
-                        if(pPort->bIsHighSpeed)
+                        if (pPort->bIsHighSpeed)
                         {
                             /* we are at high-speed, so use full-speed and switch the type */
                             bSwitchDescriptor = TRUE;
@@ -851,32 +954,39 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     }	/* END: switch on descriptor type */
                 }	/* END: if we have high-speed descriptors */
 
-                /* search the descriptor buffer */
-                while(!bOK && (pScan < pScanLimit))
+                if ((MUSB_DT_STRING == bQueryType) && (0xEE == wWhich))
                 {
-                    if(bQueryType == pScan[1])
+                    wWhich = 0x01;
+                    wIndex = 0x0409;
+                }
+
+                /* search the descriptor buffer */
+                while (!bOK && (pScan < pScanLimit))
+                {
+                    MUSB_DPRINTF("bOK=%d, pScan[1]=0x%x, bQueryType=0x%x\r\n", bOK, pScan[1], bQueryType);
+                    if (bQueryType == pScan[1])
                     {
                         /* special case for strings */
-                        if(MUSB_DT_STRING == bQueryType)
+                        if (MUSB_DT_STRING == bQueryType)
                         {
                             /* remember where langid's are */
-                            if(!wIter)
+                            if (!wIter)
                             {
                                 wLangCount = (pScan[0] - 2) >> 1;
                                 pwLangId = (const uint16_t *) & (pScan[2]);
                             }
-                            else if(wWhich && !bFixed)
+                            else if (wWhich && !bFixed)
                             {
                                 bFixed = TRUE;
                                 /* scale wWhich based on langid */
-                                for(wLang = 0; wLang < wLangCount; wLang++)
+                                for (wLang = 0; wLang < wLangCount; wLang++)
                                 {
-                                    if(wIndex == MUSB_SWAP16P((uint8_t *) & (pwLangId[wLang])))
+                                    if (wIndex == MUSB_SWAP16P((uint8_t *) & (pwLangId[wLang])))
                                     {
                                         break;
                                     }
                                 }
-                                if(wLang >= wLangCount)
+                                if (wLang >= wLangCount)
                                 {
                                     /* langid not found */
                                     *pbStatus = MUSB_STATUS_STALLED;
@@ -885,7 +995,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                                 wWhich += (wLang * pPort->pFunctionClient->wStringDescriptorCount);
                             }
                         }
-                        if(wIter == wWhich)
+                        if (wIter == wWhich)
                         {
                             bOK = TRUE;
                             break;
@@ -894,13 +1004,14 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     }
                     pScan += pScan[0];
                 }
-                if(pScan < pScanLimit)
+                if (pScan < pScanLimit)
                 {
+                    MUSB_DPRINTF("dance end bType=0x%x, bSwitchDescriptor=%d\r\n", bType, bSwitchDescriptor);
                     /* descriptor found; see if we need to finish the dance */
-                    if(bSwitchDescriptor)
+                    if (bSwitchDescriptor)
                     {
                         /* we need to generate/modify */
-                        switch(bType)
+                        switch (bType)
                         {
                         case MUSB_DT_DEVICE:
                             /* generate a device descriptor based on a qualifier descriptor */
@@ -948,7 +1059,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     else
                     {
                         /* no dance; just send it from the client buffer */
-                        switch(bQueryType)
+                        switch (bQueryType)
                         {
                         case MUSB_DT_CONFIG:
                         case MUSB_DT_OTHER_SPEED:
@@ -958,6 +1069,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                             pPort->wSetupDataSize = (uint16_t)MUSB_MIN(wLength, pScan[0]);
                         }
                         pPort->pSetupData = (uint8_t *)pScan;
+                        MUSB_DPRINTF("no dance: pPort->wSetupDataSize=0x%x\r\n", pPort->wSetupDataSize);
                     }
                 }
                 else
@@ -968,6 +1080,7 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             }
             else if (MUSB_RECIP_INTERFACE == bRecip)
             {
+                MUSB_DPRINTF("RECIP_INTERFACE\r\n");
                 wIter = 0;
                 bOK = FALSE;
                 bOurs = TRUE;
@@ -1010,19 +1123,21 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             break;
 
         case MUSB_REQ_GET_CONFIGURATION:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_GET_CONFIGURATION\r\n");
             bOurs = TRUE;
             pPort->pSetupData[0] = pPort->bConfigValue;
             pPort->wSetupDataSize = 1;
             break;
 
         case MUSB_REQ_SET_CONFIGURATION:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_SET_CONFIGURATION\r\n");
             bOurs = TRUE;
             pPort->wSetupDataSize = 0;
             bOK = FALSE;
-            if(pPort->bUsbState >= MUSB_ADDRESS)
+            if (pPort->bUsbState >= MUSB_ADDRESS)
             {
                 bOK = FALSE;
-                if(!wValue)
+                if (!wValue)
                 {
                     bOK = TRUE;
                     pPort->bConfigValue = 0;
@@ -1033,41 +1148,48 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
                     bOK = MGC_FunctionConfigSelected(pPort, (uint8_t)(wValue & 0xff));
                 }
             }
-            if(!bOK)
+            if (!bOK)
             {
                 *pbStatus = MUSB_STATUS_STALLED;
             }
             break;
 
         case MUSB_REQ_GET_INTERFACE:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_GET_INTERFACE\r\n");
         case MUSB_REQ_SET_INTERFACE:
+            MUSB_DPRINTF("MGC_FunctionParseSetup: MUSB_REQ_SET_INTERFACE\r\n");
+            MUSB_DPRINTF("MUSB_REQ_SET_INTERFACE bUsbState=0x%x\r\n", pPort->bUsbState);
             pPort->wSetupDataSize = 0;
             /* if improper state, stall */
-            if(MUSB_CONFIGURED != pPort->bUsbState)
+            if (MUSB_CONFIGURED != pPort->bUsbState)
             {
                 bOurs = TRUE;
                 *pbStatus = MUSB_STATUS_STALLED;
             }
-            else if(MUSB_REQ_SET_INTERFACE == pRequest->bRequest)
+            else //if (MUSB_REQ_SET_INTERFACE == pRequest->bRequest)
             {
                 /* re-bind */
                 bOurs = TRUE;
-                if(MUSB_STATUS_OK != MGC_FunctionSetInterface(pPort,
+                if (MUSB_STATUS_OK != MGC_FunctionSetInterface(pPort,
                         (uint8_t)(wIndex & 0xff), (uint8_t)(wValue & 0xff)))
                 {
                     *pbStatus = MUSB_STATUS_STALLED;
                 }
             }
             break;
+
+        default:
+            break;
         }   /* END: switch on request type */
     }	/* END: if standard request */
     else if (pRequest && (MUSB_TYPE_CLASS == (pRequest->bmRequestType & MUSB_TYPE_MASK)))
     {
+        MUSB_DPRINTF("CLASS\r\n");
         bOurs = TRUE;
         wValue = ((((pRequest->wValue) & 0x00FF) << 8) | (((pRequest->wValue) & 0xFF00) >> 8));
         wIndex = ((((pRequest->wIndex) & 0x00FF) << 8) | (((pRequest->wIndex) & 0xFF00) >> 8));
-        MUSB_PRT("CLASS: pRequest->bRequest = 0x%x, wIndex = 0x%x, wValue = 0x%x\r\n",
-                 pRequest->bRequest, wIndex, wValue);
+        MUSB_DPRINTF("CLASS: pRequest->bRequest = 0x%x, wIndex = 0x%x, wValue = 0x%x\r\n",
+                pRequest->bRequest, wIndex, wValue);
         switch (pRequest->bRequest)
         {
         case MUSB_CLASS_SET_CURRENT:
@@ -1095,31 +1217,122 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
             break;
 
         case MUSB_CLASS_GET_CURRENT:
+            switch (wIndex)
+            {
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                    switch (wValue & 0x00FF)
+                    {
+                        case MUSB_CLASS_MUTE_CTRL:
+                            pPort->pSetupData[0] = 0x00;
+                            pPort->wSetupDataSize = 1;
+                            break;
+
+                        case MUSB_CLASS_VOLUME_CTRL:
+                            pPort->pSetupData[0] = 0x80;
+                            pPort->pSetupData[1] = 0x19;
+                            pPort->wSetupDataSize = 2;
+                            break;
+
+                        case MUSB_CLASS_BASS_BOOST_CTRL:
+                            pPort->pSetupData[0] = 0x00;
+                            pPort->wSetupDataSize = 1;
+                            break;
+
+                        default:
+                            pPort->pSetupData[0] = 0x00;
+                            pPort->wSetupDataSize = 1;
+                            break;
+                    }
+                    break;
+                case 9:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
+                default:
+                    break;
+            }
             break;
 
         case MUSB_CLASS_GET_LEN:
+            pPort->pSetupData[0] = 0x40;
+            pPort->pSetupData[1] = 0x00;
+            pPort->wSetupDataSize = 2;
             break;
 
         case MUSB_CLASS_GET_INFO:
+            pPort->pSetupData[0] = 0x44;
+            pPort->wSetupDataSize = 1;
             break;
 
         case MUSB_CLASS_GET_MINIUM:
+            switch (wValue & 0x00FF)
+            {
+                case MUSB_CLASS_VOLUME_CTRL:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
 
+                default:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
+            }
             break;
 
         case MUSB_CLASS_GET_MAXIUM:
+            switch (wValue & 0x00FF)
+            {
+                case MUSB_CLASS_VOLUME_CTRL:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x1F;
+                    pPort->wSetupDataSize = 2;
+                    break;
 
+                default:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
+            }
             break;
 
         case MUSB_CLASS_GET_RES:
+            switch (wValue & 0x00FF)
+            {
+                case MUSB_CLASS_VOLUME_CTRL:
+                    pPort->pSetupData[0] = 0x10;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
 
+                default:
+                    pPort->pSetupData[0] = 0x00;
+                    pPort->pSetupData[1] = 0x00;
+                    pPort->wSetupDataSize = 2;
+                    break;
+            }
             break;
 
         case MUSB_CLASS_GET_DEF:
+            pPort->pSetupData[0] = 0x00;
+            pPort->pSetupData[1] = 0x00;
+            pPort->wSetupDataSize = 2;
             break;
 
+        case MUSB_CLASS_GET_MAX_LUN:
+            pPort->pSetupData[0] = 0x00;
+            pPort->wSetupDataSize = 1;
+            break;
+
+            // All other OUT requests not supported
         default:
-            MUSB_PRT("bRequest=0x%x\r\n", pRequest->bRequest);
+            MUSB_ERR_PRINTF("CLASS: bRequest=0x%x\r\n", pRequest->bRequest);
             bOurs = FALSE;
             break;
         }
@@ -1139,12 +1352,14 @@ uint8_t MGC_FunctionParseSetup(MGC_Port *pPort, uint8_t *pbStatus)
  */
 void MGC_FunctionChangeState(MGC_Port *pPort, MUSB_State State)
 {
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     /* only signal a change */
-    if(pPort->bUsbState != State)
+    MUSB_DPRINTF("%s: pPort->bUsbState = 0x%x, State = 0x%x\r\n", __FUNCTION__, pPort->bUsbState, State);
+    if (pPort->bUsbState != State)
     {
         MGC_DIAG1(2, pPort->pController, "USB state change: ", (uint32_t)State, 10, 0);
         pPort->bUsbState = State;
-        if(pPort->pFunctionClient)//就是MGC_MsdFunctionClient
+        if (pPort->pFunctionClient)//就是MGC_MsdFunctionClient
         {
             pPort->pFunctionClient->pfUsbState(pPort->pFunctionClient->pPrivateData,
                                                (MUSB_BusHandle)pPort, State);
@@ -1161,11 +1376,12 @@ uint32_t MUSB_DeviceResponse(MUSB_BusHandle hBus, uint32_t dwSequenceNumber,
     uint32_t dwStatus = MUSB_STATUS_TIMEOUT;
     MGC_Port *pPort = (MGC_Port *)hBus;
 
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
     MGC_DIAG1(3, pPort->pController, "DeviceResponse: seqNum=",
               dwSequenceNumber, 16, 8);
     MGC_DIAG2(3, pPort->pController, "DeviceResponse: wLength=",
               wResponseDataLength, "/stall=", bStall, 16, 4);
-    if(dwSequenceNumber == pPort->dwSequenceNumber)
+    if (dwSequenceNumber == pPort->dwSequenceNumber)
     {
         pPort->pSetupData = (uint8_t *)pResponseData;
         pPort->wSetupDataSize = wResponseDataLength;
@@ -1180,11 +1396,11 @@ void MUSB_SetFunctionParse(MUSB_BusHandle hBus, uint8_t bParse)
 {
     MGC_Port *pPort = (MGC_Port *)hBus;
 
-    if(pPort)
+    MUSB_DPRINTF1("%s\r\n", __FUNCTION__);
+    if (pPort)
     {
         pPort->bParse = bParse;
     }
 }
 #endif
-// eof
 

@@ -1,6 +1,14 @@
-#ifndef CODEC_PCM_H__
-#define CODEC_PCM_H__
+/*
+ * File: codec_pcm.h
+ * 
+ * COPYRIGHT (C) 2012-2018, Shanghai Real-Thread Technology Co., Ltd
+ */
 
-struct audio_codec *codec_pcm_create(struct audio_stream *stream);
+#ifndef __CODEC_PCM_H__
+#define __CODEC_PCM_H__
+
+int player_codec_pcm_register(void); 
+rt_err_t codec_pcm_set_sample_rate(int sample_rate); 
+rt_err_t codec_pcm_set_channel_num(int channel_num); 
 
 #endif

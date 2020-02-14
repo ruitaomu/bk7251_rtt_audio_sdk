@@ -84,7 +84,7 @@ typedef struct  ps_sta
     UINT8 if_wait_bcn;
     UINT8 liston_int;
     PS_LISTEN_MODE liston_mode;
-    UINT8 pwm0_clkmux;
+    UINT8 pwm_clkmux;
     PS_TM_STATUS tm_status;
     UINT8 ps_dtim_period;
     UINT8 ps_dtim_count;
@@ -97,7 +97,7 @@ typedef struct  ps_sta
     UINT16 PsPeriWakeupWaitTimeMs ;
     UINT16 sleep_ms;
     UINT32 nxmac_timer_v;
-    UINT32 pwm0_less_time;
+    UINT32 pwm_less_time;
     UINT32 sleep_count ;
     UINT32 next_ps_time;
     struct co_list wk_list;
@@ -121,6 +121,10 @@ extern void bmsg_ps_sender(uint8_t ioctl);
 extern void ps_fake_data_rx_check(void);
 extern bool ps_sleep_check(void);
 extern u8 rwn_mgmt_is_only_sta_role_add(void);
+extern void power_save_beacon_state_set(PS_STA_BEACON_STATE state);
+extern void power_save_wait_timer_init(void);
+extern void power_save_keep_timer_stop(void);
+extern void power_save_wait_timer_stop(void);
 
 //#define  PS_NEXT_DATA_CK_TM    2500 //5s
 
