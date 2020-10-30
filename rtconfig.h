@@ -182,17 +182,17 @@
 
 /* IoT - internet of things */
 
-#define PKG_USING_PAHOMQTT
-#define PAHOMQTT_PIPE_MODE
-#define PKG_USING_PAHOMQTT_EXAMPLE
-#define RT_PKG_MQTT_THREAD_STACK_SIZE 4096
-#define PKG_PAHOMQTT_SUBSCRIBE_HANDLERS 1
-#define MQTT_DEBUG
-#define PKG_USING_PAHOMQTT_LATEST
+//#define PKG_USING_PAHOMQTT
+//#define PAHOMQTT_PIPE_MODE
+//#define PKG_USING_PAHOMQTT_EXAMPLE
+//#define RT_PKG_MQTT_THREAD_STACK_SIZE 4096
+//#define PKG_PAHOMQTT_SUBSCRIBE_HANDLERS 1
+//#define MQTT_DEBUG
+//#define PKG_USING_PAHOMQTT_LATEST
 #define PKG_USING_WEBCLIENT
 #define PKG_USING_WEBCLIENT_V100
-#define PKG_USING_CJSON
-#define PKG_USING_CJSON_V102
+//#define PKG_USING_CJSON
+//#define PKG_USING_CJSON_V102
 
 /* Wi-Fi */
 
@@ -299,11 +299,11 @@
 
 /* RT-Thread OTA Samples */
 
-#define SAMPLE_USING_OTA_HTTP
+//#define SAMPLE_USING_OTA_HTTP
 
 /* Test samples */
 
-#define PKG_USING_RT_OTA
+//#define PKG_USING_RT_OTA
 
 #define RT_USING_PTHREADS
 
@@ -313,4 +313,5 @@
 /* tools packages */
 #define PKG_USING_EASYFLASH
 
+#define PKG_USING_JOSHVM
 #endif

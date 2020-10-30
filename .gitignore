@@ -24,3 +24,5 @@ Midea-X1
 GPATH
 GRTAGS
 GTAGS
+components/josh/libs/*.a
+rtthread.bin

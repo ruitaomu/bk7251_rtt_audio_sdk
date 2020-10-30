@@ -49,6 +49,23 @@ extern void user_main( beken_thread_arg_t args );
 
 extern int rt_hw_flash_disk_readonly_init(const char *name, uint32_t base, uint32_t sector_size, uint32_t capacity);
 
+extern void JavaTask();
+
+static void java_thread_entry(void *parameter)
+{
+    rt_kprintf("java task started.\n");
+    JavaTask();
+}
+
+int startJavaTask(void)
+{
+    rt_thread_t tid = rt_thread_create("java",
+                       java_thread_entry, RT_NULL,
+                       32 * 1024, 20, 10);
+    rt_thread_startup(tid);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     /* mount ROMFS as root directory */
@@ -101,7 +118,8 @@ int main(int argc, char **argv)
     player_codec_opencore_amr_register(); 
 	player_system_init();
 #endif
-
+    rt_kprintf("Call startJavaTask.\n");
+    startJavaTask();
     return 0;
 }
 
